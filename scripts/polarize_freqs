@@ -1,0 +1,41 @@
+#!/usr/bin/awk -f
+
+BEGIN {
+    FS = "\t";  # Set input field separator to tab
+    OFS = "\t"; # Set output field separator to tab
+}
+
+{
+    # Skip the header row
+    if (NR == 1) {
+        print $0;
+        next;
+    }
+
+    column8 = $8;
+    column9 = $9;
+    char_length = length(column8);  # Dynamically determine length of characters in column 8
+    first_char = substr(column8, 1, 1);  # Get the first character of column 8
+
+    for (i = 1; i <= char_length; i++) {  # Loop through the length of characters in column 8
+        char8 = substr(column8, i, 1);
+        char9 = substr(column9, i, 1);
+
+        if (char8 != first_char) {
+            # Swap the characters in columns 8 and 9
+            $8 = substr($8, 1, i-1) char9 substr($8, i+1);
+            $9 = substr($9, 1, i-1) char8 substr($9, i+1);
+
+            # Dynamically calculate the corresponding maa_X and mia_X columns
+            maa_column = 10 + i - 1;  # Maa starts at column 10 (adjusted for dynamic length)
+            mia_column = 10 + char_length + i - 1;  # Mia starts right after all maa columns
+
+            # Swap the maa_X and mia_X values
+            tmp = $maa_column;
+            $maa_column = $mia_column;
+            $mia_column = tmp;
+        }
+    }
+
+    print $0;
+}
