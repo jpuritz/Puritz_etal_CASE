@@ -4,6 +4,181 @@ CASE Full FINAL
 # Setup
 
 ``` r
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+```
+
+    ## 
+    ## Attaching package: 'dplyr'
+
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
+
+``` r
+library(qvalue)
+library(plyr)
+```
+
+    ## ------------------------------------------------------------------------------
+
+    ## You have loaded plyr after dplyr - this is likely to cause problems.
+    ## If you need functions from both plyr and dplyr, please load plyr first, then dplyr:
+    ## library(plyr); library(dplyr)
+
+    ## ------------------------------------------------------------------------------
+
+    ## 
+    ## Attaching package: 'plyr'
+
+    ## The following objects are masked from 'package:dplyr':
+    ## 
+    ##     arrange, count, desc, failwith, id, mutate, rename, summarise,
+    ##     summarize
+
+``` r
+library(stringr)
+library(pcadapt)
+library(poolSeq)
+```
+
+    ## Loading required package: data.table
+
+    ## 
+    ## Attaching package: 'data.table'
+
+    ## The following objects are masked from 'package:dplyr':
+    ## 
+    ##     between, first, last
+
+    ## Loading required package: foreach
+
+    ## Loading required package: stringi
+
+    ## Loading required package: matrixStats
+
+    ## 
+    ## Attaching package: 'matrixStats'
+
+    ## The following object is masked from 'package:plyr':
+    ## 
+    ##     count
+
+    ## The following object is masked from 'package:dplyr':
+    ## 
+    ##     count
+
+    ## Loading required package: Rcpp
+
+``` r
+library(ACER)
+library(ggman)
+```
+
+    ## Loading required package: ggrepel
+
+``` r
+theme_black = function(base_size = 16, base_family = "") {
+  
+  theme_grey(base_size = base_size, base_family = base_family) %+replace%
+    
+    theme(
+      # Specify axis options
+      axis.line = element_line(colour = "white", size = 1.5),
+      axis.text.x = element_text(size = base_size*0.8, color = "white", lineheight = 0.9),  
+      axis.text.y = element_text(size = base_size*0.8, color = "white", lineheight = 0.9),  
+      axis.ticks = element_line(color = "white", size  =  0.2),  
+      axis.title.x = element_text(size = base_size, color = "white", margin = margin(0, 10, 0, 0)),  
+      axis.title.y = element_text(size = base_size, color = "white", angle = 90, margin = margin(0, 10, 0, 0)),  
+      axis.ticks.length = unit(0.3, "lines"),   
+      # Specify legend options
+      legend.background = element_rect(color = NA, fill = "transparent"),  
+      legend.key = element_rect(color = "white",  fill = "transparent"),  
+      legend.key.size = unit(1.2, "lines"),  
+      legend.key.height = NULL,  
+      legend.key.width = NULL,      
+      legend.text = element_text(size = base_size*0.8, color = "white"),  
+      legend.title = element_text(size = base_size*0.8, face = "bold", hjust = 0, color = "white"),  
+      legend.position = "right",  
+      legend.text.align = NULL,  
+      legend.title.align = NULL,  
+      legend.direction = "vertical",  
+      legend.box = NULL, 
+      # Specify panel options
+      panel.background = element_rect(fill = "transparent", color  =  NA),  
+      panel.border = element_blank(),  
+      panel.grid.major = element_line(color = "transparent"),  
+      panel.grid.minor = element_line(color = "transparent"),  
+      #panel.margin = unit(0.5, "lines"),   
+      panel.spacing= unit(0.5, "lines"),
+      # Specify facetting options
+      strip.background = element_rect(fill = "transparent", color = "transparent"),  
+      strip.text.x = element_text(size = base_size*0.8, color = "white"),  
+      strip.text.y = element_text(size = base_size*0.8, color = "white",angle = -90),  
+      # Specify plot options
+      plot.background = element_rect(color = "transparent", fill = "transparent"),  
+      plot.title = element_text(size = base_size*1.2, color = "white"),  
+      plot.margin = unit(rep(1, 4), "lines")
+      
+    )
+  
+}
+
+Qvalue_convert <- function(table) {
+
+
+table <- spread(table,GROUP,PVAL)  
+  
+table$CHR <- table$CHROM
+
+table %>% 
+  mutate(CHR = str_replace(CHR, "NC_035780.1", "1")) %>% 
+  mutate(CHR = str_replace(CHR, "NC_035781.1", "2")) %>% 
+  mutate(CHR = str_replace(CHR, "NC_035782.1", "3")) %>% 
+  mutate(CHR = str_replace(CHR, "NC_035783.1", "4")) %>% 
+  mutate(CHR = str_replace(CHR, "NC_035784.1", "5")) %>% 
+  mutate(CHR = str_replace(CHR, "NC_035785.1", "6")) %>% 
+  mutate(CHR = str_replace(CHR, "NC_035786.1", "7")) %>% 
+  mutate(CHR = str_replace(CHR, "NC_035787.1", "8")) %>%
+  mutate(CHR = str_replace(CHR, "NC_035788.1", "9")) %>% 
+  mutate(CHR = str_replace(CHR, "NC_035789.1", "10"))  -> pp1
+
+pp1 <- unite(pp1, "SNP", c("CHROM","BP"),remove = FALSE)
+
+pp1$CHR <- as.numeric(pp1$CHR)  
+
+pp1$QCA <- qvalue(pp1$PCA, pi0 = 1)$qvalues
+pp1$QCON <- qvalue(pp1$PCON, pi0 = 1)$qvalues
+pp1$QSE <- qvalue(pp1$PSE, pi0 = 1)$qvalues
+pp1$QCASE <- qvalue(pp1$PCASE, pi0 = 1)$qvalues
+
+return(pp1)
+}
+
+Significat_subset <-function(pv, alpha, alpha2) {
+
+ppsig <- subset(pv, QCA < alpha | QCASE < alpha | QSE < alpha )
+
+#ppsig <- subset(ppsig, QCON > alpha2 | is.na(QCON) )
+ppsig <- subset(ppsig, QCON > alpha2 )
+print(nrow(pv))
+print(nrow(ppsig))
+print(nrow(ppsig)/nrow(pv))
+return(ppsig)
+}
+
+
+cbPaletteSmall <- c("#E69F00", "#009E73", "#999999","sky blue","#0072B2")
+cbPaletteSmall4 <- c("#999999","#E69F00", "#0072B2", "#009E73")
+cbPaletteSmall3 <- c("#E69F00", "#0072B2","#009E73")
+```
+
+``` r
 sessionInfo()
 ```
 
@@ -1157,7 +1332,7 @@ ppsig2.CASE <- ppsig2.CASE %>%
 
 
 
-man <-ggman(ppsig2.CASE, pvalue="PCASE", chr="CHR", snp="SNP", relative.positions = FALSE ,sigLine = NA, pointSize=1, ymax=12, ymin=2, title = "")
+man <-ggman(ppsig2.CASE, pvalue="PCASE", chr="CHR", snp="SNP", relative.positions = FALSE ,sigLine = NA, pointSize=1, ymax=20, ymin=2, title = "")
 
 png(filename="CASEmp.png", type="cairo",units="px", width=4000, height=950, res=300, bg="transparent")
 #man + theme_black()
@@ -1167,6 +1342,12 @@ dev.off()
 
     ## png 
     ##   2
+
+``` r
+man+scale_color_manual(values = c(cbPaletteSmall4[4], alpha(cbPaletteSmall4[4],0.5)))
+```
+
+![](CASE_FULL_FINAL_files/figure-gfm/unnamed-chunk-42-1.png)<!-- -->
 
 ``` r
 alpha = 0.1
@@ -1183,17 +1364,21 @@ ppsig2.CA <- ppsig2.CA %>%
   )
 
 
-man <-ggman(ppsig2.CA, pvalue="PCA", chr="CHR", snp="SNP", relative.positions = FALSE ,sigLine = NA, pointSize=1,title = "")
+man <-ggman(ppsig2.CA, pvalue="PCA", chr="CHR", snp="SNP", relative.positions = FALSE ,sigLine = NA, pointSize=1,title = "",ymax=20)
 
 png(filename="CAmp.png", type="cairo",units="px", width=4000, height=950, res=300, bg="transparent")
-man <- man + theme_black()
-#man
-man+scale_color_manual(values = c(cbPaletteSmall4[2], alpha(cbPaletteSmall4[2],0.5)))
+man+scale_color_manual(values = c(cbPaletteSmall4[2], alpha(cbPaletteSmall4[2],0.5))) + theme_black()
 dev.off()
 ```
 
     ## png 
     ##   2
+
+``` r
+man+scale_color_manual(values = c(cbPaletteSmall4[2], alpha(cbPaletteSmall4[2],0.5)))
+```
+
+![](CASE_FULL_FINAL_files/figure-gfm/unnamed-chunk-43-1.png)<!-- -->
 
 ``` r
 ppsig2.SE <- subset(total.sig, QSE < alpha )
@@ -1207,7 +1392,7 @@ ppsig2.SE <- ppsig2.SE %>%
     BP = first(BP)                       # Take the first value of BP for each group
   )
 
-man <-ggman(ppsig2.SE, pvalue="PSE", chr="CHR", snp="SNP", relative.positions = FALSE ,sigLine = NA, pointSize=1, ymax=13, title = "")
+man <-ggman(ppsig2.SE, pvalue="PSE", chr="CHR", snp="SNP", relative.positions = FALSE ,sigLine = NA, pointSize=1, ymax=20, title = "")
 #man <-ggmanHighlight(man,ppsig.SE$SNP, size=1.5, colour = cbPaletteSmall[3])
 
 png(filename="SEmp.png", type="cairo",units="px", width=4000, height=950, res=300, bg="transparent")
@@ -1217,6 +1402,12 @@ dev.off()
 
     ## png 
     ##   2
+
+``` r
+man+scale_color_manual(values = c(cbPaletteSmall4[3], alpha(cbPaletteSmall4[3],0.5)))
+```
+
+![](CASE_FULL_FINAL_files/figure-gfm/unnamed-chunk-44-1.png)<!-- -->
 
 ``` r
 ppsig <- subset(total.sig, QCA < alpha | QCASE < alpha | QSE < alpha )
