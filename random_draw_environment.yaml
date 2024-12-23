@@ -1,0 +1,6 @@
+name: randowm_draw
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+prefix: /home/jpuritz/miniconda3/envs/randowm_draw
