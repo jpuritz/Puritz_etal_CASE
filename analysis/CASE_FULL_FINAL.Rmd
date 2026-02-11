@@ -40,7 +40,7 @@ theme_black = function(base_size = 16, base_family = "") {
       axis.ticks.length = unit(0.3, "lines"),   
       # Specify legend options
       legend.background = element_rect(color = NA, fill = "transparent"),  
-      legend.key = element_rect(color = "white",  fill = "transparent"),  
+      legend.key = element_rect(color = NA,  fill = "transparent"),  
       legend.key.size = unit(1.2, "lines"),  
       legend.key.height = NULL,  
       legend.key.width = NULL,      
@@ -64,7 +64,7 @@ theme_black = function(base_size = 16, base_family = "") {
       strip.text.y = element_text(size = base_size*0.8, color = "white",angle = -90),  
       # Specify plot options
       plot.background = element_rect(color = "transparent", fill = "transparent"),  
-      plot.title = element_text(size = base_size*1.2, color = "white"),  
+      plot.title = element_text(size = base_size*1.2, color = "white", hjust = 1),  
       plot.margin = unit(rep(1, 4), "lines")
       
     )
@@ -132,20 +132,11 @@ Significat_subset <- function(pv, alpha, alpha2) {
 group_and_average <- function(df) {
   df %>%
     dplyr::group_by(SNP) %>%
-    dplyr::summarize(
-      # Use a conditional inside across to handle all-NA groups
-      across(
-        c(PCA, PCASE, PCON, PSE, CHR, QCA, QCON, QSE, QCASE), 
-        ~ if (all(is.na(.))) NA else min(., na.rm = TRUE)),
-      # Combine logical columns, retain TRUE if any TRUE exists in the group
-      Sig.CASE = any(Sig.CASE, na.rm = TRUE),
-      Sig.CA = any(Sig.CA, na.rm = TRUE),
-      Sig.SE = any(Sig.SE, na.rm = TRUE),
-      CHROM = first(CHROM),
-      BP = first(BP),
-      .groups = "drop"  # Ungroup the result
-    )
-}
+    dplyr::summarize(across(c(PCA, PCASE, PCON, PSE, CHR, QCA, QCON, QSE, QCASE), 
+                            ~ if (all(is.na(.))) NA else min(., na.rm = TRUE)),
+                     Sig.CASE = any(Sig.CASE, na.rm = TRUE),
+                     Sig.CA = any(Sig.CA, na.rm = TRUE),Sig.SE = any(Sig.SE, na.rm = TRUE),
+                     CHROM = first(CHROM), BP = first(BP), .groups = "drop") }
 
 
 cbPaletteSmall <- c("#E69F00", "#009E73", "#999999","sky blue","#0072B2")
@@ -182,32 +173,28 @@ cd ../raw.vcf
 bcftools index CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz
 bcftools query -l CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz > samples
 ```
-## Break up into Spawns (Blocks)
+## Create Unified Sync file
 Each sequencing run had some extra samples that need to be removed before starting the analysis
-Each block was filtered for missing data less than 10& and MAF of > 0.015 based on read counts
+Each block was filtered for missing data less than 10% and MAF of > 0.015 based on read counts using VCF file first.
+
+
+
 ```{bash, eval=FALSE}
 source activate CASE
 
 cd ../raw.vcf
-bcftools view -S <(grep B11 samples | grep -v 1.G) CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz | bcftools view -i 'F_MISSING<0.1'  | bcftools view -M 4 -m 2 | bcftools +fill-tags -- -t 'AAF:1=sum(FORMAT/AO)/sum(FORMAT/DP)' | bcftools +fill-tags -- -t  FORMAT/VAF | bcftools view --threads 40 -i 'AAF > 0.015 && AAF < 0.985' -O z -o B11.CASE.FIL.vcf.gz
+bcftools view -S <(grep B11 samples | grep -v 1.G) CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz | bcftools view -i 'F_MISSING<0.1'  | bcftools view -M 4 -m 2 | bcftools +fill-tags -- -t 'AAF:1=sum(FORMAT/AO)/sum(FORMAT/DP)' | bcftools +fill-tags -- -t  FORMAT/VAF | bcftools view --threads 40 -i 'AAF > 0.015 && AAF < 0.985' | bcftools query -f '%CHROM\t%POS\n' > B11.pos
 
-bcftools index B11.CASE.FIL.vcf.gz
+bcftools view -S <(grep B10 samples | grep -v J17 | grep -v J05) CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz | bcftools view -i 'F_MISSING<0.1' | bcftools view -M 4 -m 2 | bcftools +fill-tags -- -t 'AAF:1=sum(FORMAT/AO)/sum(FORMAT/DP)' | bcftools +fill-tags -- -t  FORMAT/VAF | bcftools view --threads 40 -i 'AAF > 0.015 && AAF < 0.985' | bcftools query -f '%CHROM\t%POS\n' > B10.pos
 
-bcftools query -f '%CHROM\t%POS\n' B11.CASE.FIL.vcf.gz > B11.pos
-
-bcftools view -S <(grep B10 samples | grep -v J17 | grep -v J05) CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz | bcftools view -i 'F_MISSING<0.1' | bcftools view -M 4 -m 2 | bcftools +fill-tags -- -t 'AAF:1=sum(FORMAT/AO)/sum(FORMAT/DP)' | bcftools +fill-tags -- -t  FORMAT/VAF | bcftools view --threads 40 -i 'AAF > 0.015 && AAF < 0.985' -O z -o B10.CASE.FIL.vcf.gz
-bcftools index B10.CASE.FIL.vcf.gz
-bcftools query -f '%CHROM\t%POS\n' B10.CASE.FIL.vcf.gz > B10.pos
-
-bcftools view -S <(grep B12 samples) CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz | bcftools view -i 'F_MISSING<0.1' | bcftools view -M 4 -m 2 | bcftools +fill-tags -- -t 'AAF:1=sum(FORMAT/AO)/sum(FORMAT/DP)' | bcftools +fill-tags -- -t  FORMAT/VAF | bcftools view --threads 40 -i 'AAF > 0.015 && AAF < 0.985' -O z -o B12.CASE.FIL.vcf.gz
-bcftools index B12.CASE.FIL.vcf.gz
-bcftools query -f '%CHROM\t%POS\n' B12.CASE.FIL.vcf.gz > B12.pos
+bcftools view -S <(grep B12 samples) CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz | bcftools view -i 'F_MISSING<0.1' | bcftools view -M 4 -m 2 | bcftools +fill-tags -- -t 'AAF:1=sum(FORMAT/AO)/sum(FORMAT/DP)' | bcftools +fill-tags -- -t  FORMAT/VAF | bcftools view --threads 40 -i 'AAF > 0.015 && AAF < 0.985' | bcftools query -f '%CHROM\t%POS\n'  > B12.pos
 
 cat B*.pos | sort | uniq > fil.pos
 
-bcftools view -R fil.pos --threads 40 -m2 -M 4 CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz -O z -o SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz
+bcftools view -R fil.pos -S <(grep -v 1.GB11 samples | grep -v J17B10| grep -v J05B10) --threads 40 -m2 -M 4 CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz -O z -o SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz
 
-bcftools view --threads 40 SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz | mawk '!/#/' | cut -f 1,2 | mawk '{print $1"\t"$2-1"\t"$2}' > total.snp.bed
+#bcftools view --threads 40 SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz | mawk '!/#/' | cut -f 1,2 | mawk '{print $1"\t"$2-1"\t"$2}' > total.snp.bed
+
 #bedtools intersect -wb -a total.snp.bed -b ~/CASE/analysis/sorted.ref3.0.gene.bed | grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > CASE.study.background.LOC
 
 ```
@@ -216,235 +203,248 @@ bcftools view --threads 40 SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz | mawk '!/#/' | 
 ```{bash, eval=FALSE}
 source activate CASE
 
-bcftools view --threads 40 ../raw.vcf/B10.CASE.FIL.vcf.gz | mawk '!/\.:\.:\./' > temp.vcf
-python2 ../scripts/VCFtoPopPool.py temp.vcf CASE.Block10.sync 
-rm temp.vcf
-
-bcftools view --threads 40 ../raw.vcf/B11.CASE.FIL.vcf.gz | mawk '!/\.:\.:\./' > temp.vcf
-python2 ../scripts/VCFtoPopPool.py temp.vcf CASE.Block11.sync 
-rm temp.vcf
-
-bcftools view --threads 40 ../raw.vcf/B12.CASE.FIL.vcf.gz  | mawk '!/\.:\.:\./' > temp.vcf
-python2 ../scripts/VCFtoPopPool.py temp.vcf CASE.Block12.sync 
-rm temp.vcf
-
-bcftools view --threads 40 ../raw.vcf/SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz  | mawk '!/\.:\.:\./' > temp.vcf
+bcftools view --threads 40 ../raw.vcf/SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz  | mawk -F'\t' -v OFS='\t' '{ for(i=1;i<=NF;i++) if($i==".:.:.:.:.:.:.:.") $i="."; print }' > temp.vcf
 python2 ../scripts/VCFtoPopPool.py temp.vcf CASE.All.Blocks.sync 
 rm temp.vcf
+```
 
+### This sort is to maintain reproducibility across older analysis
+```{bash}
+mawk 'BEGIN {OFS="\t"
+    order["CHROM"] = 0
+    order["NC_035789.1"] = 1
+    order["NC_035780.1"] = 2
+    order["NC_035781.1"] = 3
+    order["NC_035782.1"] = 4
+    order["NC_035783.1"] = 5
+    order["NC_035784.1"] = 6
+    order["NC_035785.1"] = 7
+    order["NC_035786.1"] = 8
+    order["NC_035787.1"] = 9
+    order["NC_035788.1"] = 10
+}
+{ print order[$1], $2, NR, $0 }' CASE.All.Blocks.sync | sort -k1,1n -k2,2n -k3,3n | cut -f4- > test.sync
+
+mv test.sync CASE.All.Blocks.sync
+```
+
+
+```{bash}
+cat <(echo -e "CHROM\tPOS") ../raw.vcf/B10.pos > B10.pos
+cat <(echo -e "CHROM\tPOS") ../raw.vcf/B11.pos > B11.pos
+cat <(echo -e "CHROM\tPOS") ../raw.vcf/B12.pos > B12.pos
+
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' B10.pos CASE.All.Blocks.sync | mawk 'NR==1{for(i=1;i<=NF;i++)if(i<=3||$i~/B10$/)k[i]}{o="";for(i=1;i<=NF;i++)if(i in k)o=o?o OFS $i:$i;print o}' OFS='\t' | mawk '!/\t\.\t/' > CASE.Block10.sync
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' B11.pos CASE.All.Blocks.sync | mawk 'NR==1{for(i=1;i<=NF;i++)if(i<=3||$i~/B11$/)k[i]}{o="";for(i=1;i<=NF;i++)if(i in k)o=o?o OFS $i:$i;print o}' OFS='\t' | mawk '!/\t\.\t/' > CASE.Block11.sync
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' B12.pos CASE.All.Blocks.sync | mawk 'NR==1{for(i=1;i<=NF;i++)if(i<=3||$i~/B12$/)k[i]}{o="";for(i=1;i<=NF;i++)if(i in k)o=o?o OFS $i:$i;print o}' OFS='\t' | mawk '!/\t\.\t/' > CASE.Block12.sync
 ```
 
 ## Add coverage stats to sync file and filter by minimum coverage
 
 ```{bash, eval=FALSE}
 source activate CASE
-mawk -f ../scripts/add_cov_sync CASE.Block10.sync | mawk '$20 > 9 && $22 > 24'> CASE.dp20.Block10.cov.sync &
-mawk -f ../scripts/add_cov_sync CASE.Block11.sync | mawk '$24 > 9 && $26 > 24'> CASE.dp20.Block11.cov.sync &
-mawk -f ../scripts/add_cov_sync CASE.Block12.sync | mawk '$24 > 9 && $26 > 24'> CASE.dp20.Block12.cov.sync &
-mawk -f ../scripts/add_cov_sync CASE.All.Blocks.sync | mawk '$66 > 9 && $68 > 24' > CASE.All.Blocks.cov.sync
+mawk -f ../scripts/add_cov_sync CASE.Block10.sync | mawk '$20 > 9 && $22 > 24' > CASE.dp20.Block10.cov.sync &
+mawk -f ../scripts/add_cov_sync CASE.Block11.sync | mawk '$24 > 9 && $26 > 24' > CASE.dp20.Block11.cov.sync &
+mawk -f ../scripts/add_cov_sync CASE.Block12.sync | mawk '$24 > 9 && $26 > 24' > CASE.dp20.Block12.cov.sync &
+#mawk -f ../scripts/add_cov_sync CASE.All.Blocks.sync | mawk '$66 > 9 && $68 > 24' > CASE.All.Blocks.cov.sync
+mawk -f ../scripts/add_cov_sync CASE.All.Blocks.sync | mawk '$60 > 9 && $62 > 24' | mawk '!/\t\.\t/'  > CASE.All.Blocks.cov.sync
+
+cut -f1,2 CASE.dp20.Block1*.cov.sync | sort | uniq -c | mawk '$1 > 2' | mawk '{print $2 "\t" $3}' > filtered.loci.allthreeblocks
 ```
 
 # Visualize across 10,000 random loci
-## B10
-```{bash, eval = FALSE, warning=FALSE}
-source activate CASE
-timeout 1s mawk '!/CHR/' CASE.dp20.Block10.cov.sync | cut -f 1-19 | shuf | shuf | head -q -n 11000 > input.b10.rand.sync 
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input input.b10.rand.sync --output-prefix B10.dp20.rand --max-coverage 50000 
-
-mawk -f ../scripts/polarize_freqs B10.dp20.rand_rc | grep -Ei '(A{16}|C{16}|G{16}|T{16})'| head -q -n 10000| cut -f10-25 | mawk '!/maa/'   > B10.dp20.rand.pool 
-```
-
-```{r}
-# Read data from a file named "B10.dp20.rand.pool" into a data frame.
-pool.data.b10 <- read.table("B10.dp20.rand.pool")
-
-# Apply a function to evaluate each cell of the data frame as an R expression.
-# This converts the text content of the cells into their evaluated form.
-df.pool.b10 <- apply(pool.data.b10, c(1, 2), function(x) eval(parse(text = x)))
-
-# Filter rows from the data frame where all elements in a row are the same.
-# The resulting data frame only keeps rows with at least one differing value.
-df_filtered <- df.pool.b10[!apply(df.pool.b10, 1, function(row) all(row == row[1])), ]
-
-# Transpose the filtered data to prepare it for input into the PCAdapt package.
-pool.data2.b10 <- t(df_filtered)
-
-# Read the transposed data and prepare it for PCAdapt analysis, specifying that the data type is "pool".
-filename.b10 <- read.pcadapt(pool.data2.b10, type = "pool")
-
-# Perform a PCAdapt analysis to detect population structure using 4 principal components (K=5)
-# and a minimum minor allele frequency (MAF) threshold of 0.01.
-res.b10.rand <- pcadapt(filename.b10, K = 4, min.maf = 0.01)
-
-# Define a vector of population labels, where each label corresponds to samples in the dataset.
-poplist.names <- c(rep("CA", 3), rep("CASE", 3), rep("CON", 3), rep("IS", 4), rep("SE", 3))
-
-# Extract the PC scores from the PCAdapt result and store them in a data frame.
-p1.b10.rand.df <- data.frame(res.b10.rand$scores)
-
-# Rename the columns of the data frame to indicate the principal components (PC1, PC2, etc.).
-colnames(p1.b10.rand.df) <- c("PC1", "PC2", "PC3", "PC4")
-
-# Add a column to the data frame for population labels.
-p1.b10.rand.df$POP <- poplist.names
-
-# Create a scatter plot of the first two principal components (PC1 vs. PC2).
-# Points are filled based on population (POP) and have a transparent appearance.
-ggplot(p1.b10.rand.df, aes(x = PC1, y = PC2, fill = POP)) + 
-  geom_point(aes(alpha = 0.2), size = 10, shape = 21, col = "black") + 
-  scale_fill_manual(values = cbPaletteSmall, name = "Treatment") + 
-  guides(alpha = FALSE) + 
-  theme(axis.title.x = element_text(size = 24), axis.title.y = element_text(size = 24))
-```
-
-```{r}
-png(filename="PC_B10_rand.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.b10.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
-```
-
-## B11
-```{bash, eval = FALSE}
-source activate CASE
-
-mawk '!/CHR/' CASE.dp20.Block11.cov.sync | cut -f1-23 | shuf | shuf -n 11000 > input.b11.rand.sync
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input input.b11.rand.sync --output-prefix B11.dp20.rand --max-coverage 50000 
-
-mawk -f ../scripts/polarize_freqs B11.dp20.rand_rc | grep -Ei '(A{20}|C{20}|G{20}|T{20})' | mawk '!/maa/' | cut -f10-29 | head -q -n 10000 > B11.dp20.rand.pool
-```
-
-```{r}
-pool.data.b11 <- read.table("B11.dp20.rand.pool")
-df.pool.b11 <- apply(pool.data.b11, c(1, 2), function(x) eval(parse(text = x)))
-df_filtered <- df.pool.b11[!apply(df.pool.b11, 1, function(row) all(row == row[1])), ]
-
-pool.data2.b11 <- t(df_filtered)
-filename.b11 <- read.pcadapt(pool.data2.b11, type = "pool")
-
-res.b11.rand <- pcadapt(filename.b11, K =5,min.maf = 0.01)
-
-poplist.names <- c(rep("CA", 4),rep("CASE", 4),rep("CON", 4),rep("IS", 4),rep("SE", 4))
-p1.b11.rand.df <- data.frame(res.b11.rand$scores)
-colnames(p1.b11.rand.df) <- c("PC1","PC2", "PC3", "PC4")
-p1.b11.rand.df$POP <- poplist.names
-ggplot(p1.b11.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+  scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-```
-```{r}
-png(filename="PC_B11_rand.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.b11.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
-```
-
-## B12
-```{bash, eval=FALSE}
-source activate CASE
-
-mawk '!/CHR/' CASE.dp20.Block12.cov.sync | cut -f1-23 > temp1
-shuf temp1 | shuf -n 11000  > input.b12.rand.sync
-rm temp1
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input input.b12.rand.sync --output-prefix B12.dp20.rand --max-coverage 50000 
-
-mawk -f ../scripts/polarize_freqs B12.dp20.rand_rc |  grep -Ei '(A{20}|C{20}|G{20}|T{20})' -m 10000 | cut -f10-29  > B12.dp20.rand.pool
-```
-
-```{r}
-pool.data.b12 <- read.table("B12.dp20.rand.pool")
-df.pool.b12 <- apply(pool.data.b12, c(1, 2), function(x) eval(parse(text = x)))
-df_filtered <- df.pool.b12[!apply(df.pool.b12, 1, function(row) all(row == row[1])), ]
-
-pool.data2.b12 <- t(df_filtered)
-filename.b12 <- read.pcadapt(pool.data2.b12, type = "pool")
-
-res.b12.rand <- pcadapt(filename.b12, K =5,min.maf = 0.01)
-
-poplist.names <- c(rep("CA", 4),rep("CASE", 4),rep("CON", 4),rep("IS", 4),rep("SE", 4))
-p1.b12.rand.df <- data.frame(res.b12.rand$scores)
-colnames(p1.b12.rand.df) <- c("PC1","PC2", "PC3", "PC4")
-p1.b12.rand.df$POP <- poplist.names
-ggplot(p1.b12.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+  scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-```
-
-```{r}
-png(filename="PC_B12_rand.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.b12.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
-```
-
 
 ## All
 ```{bash, eval = FALSE}
 source activate CASE
 
-mawk '!/CHR/' CASE.All.Blocks.cov.sync | mawk '$66 > 9' | cut --complement -f15,4,17,29,40,65- | shuf -n 50000 | shuf -n 11000  > input.all.rand.sync
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input input.all.rand.sync --output-prefix all.dp20.rand --max-coverage 50000 
+mawk '!/CHR/' filtered.loci.allthreeblocks | shuf -n 50000  | shuf -n 10000 > rand.loci
 
-mawk -f ../scripts/polarize_freqs all.dp20.rand_rc | grep -Ei '(A{20}|C{20}|G{20}|T{20})' -m 10000 | cut -f10-65  > all.dp20.rand.pool
-
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' rand.loci CASE.All.Blocks.cov.sync | cut --complement -f60- > input.all.rand.sync
 
 ```
 
 ```{r}
-pool.data.all <- read.table("all.dp20.rand.pool")
-df.pool.all <- apply(pool.data.all, c(1, 2), function(x) eval(parse(text = x)))
-df_filtered.all <- df.pool.all[!apply(df.pool.all, 1, function(row) all(row == row[1])), ]
+input.all.rand <- read.sync(file="input.all.rand.sync", gen=seq(1,56), repl=seq(1,56), polarization="rising")
 
-pool.data2.all <- t(df_filtered.all)
-filename.all <- read.pcadapt(pool.data2.all, type = "pool")
 
-res.all.rand <- pcadapt(filename.all, K =5,min.maf = 0.0001)
+input.all.rand.af <- af(input.all.rand,gen=seq(1,56), repl=seq(1,56))
+treatment.labels <- c(rep("CA", 11),rep("CASE", 11),rep("CON", 11),rep("IS", 12),rep("SE", 11))
+spawn.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12","B11","B10","B11","B12","B12","B10","B12","B11","B10","B11","B11","B12","B10","B11","B12","B11","B10","B12","B10","B11","B12","B11","B12","B10","B11","B10","B11","B10","B11","B10","B11","B12","B12","B12","B12","B11","B12","B10","B10","B11","B11","B10","B12","B12","B11","B12")
 
-poplist.names <- c(rep("CA", 11),rep("CASE", 11),rep("CON", 11),rep("IS", 12),rep("SE", 11))
-poplist.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12","B11","B10","B11","B12","B12","B10","B12","B11","B10","B11","B11","B12","B10","B11","B12","B11","B10","B12","B10","B11","B12","B11","B12","B10","B11","B10","B11","B10","B11","B10","B11","B12","B12","B12","B12","B11","B12","B10","B10","B11","B11","B10","B12","B12","B11","B12")
-p1.all.rand.df <- data.frame(res.all.rand$scores)
-colnames(p1.all.rand.df) <- c("PC1","PC2", "PC3", "PC4")
-p1.all.rand.df$POP <- poplist.names
-ggplot(p1.all.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+  scale_fill_manual(values=cbPaletteSmall,name="Spawn")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
+colnames(input.all.rand.af) <- paste(treatment.labels,spawn.names,sep="_")
+
+
+# Perform PCA
+af_t <- t(input.all.rand.af)
+
+pca_res <- prcomp(af_t, center = TRUE, scale. = TRUE)
+
+# Get scores for plotting
+pca_df <- as.data.frame(pca_res$x)
+#pca_df$locus <- rownames(input.all.rand.af)  # keep locus IDs if you have them
+
+var_explained <- pca_res$sdev^2 / sum(pca_res$sdev^2) * 100
+
+# Example: if you have a vector "pop_group" the same length as rows
+
+treatment.labels <- c(rep("CA", 11),rep("CASE", 11),rep("CON", 11),rep("IS", 12),rep("SE", 11))
+spawn.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12","B11","B10","B11","B12","B12","B10","B12","B11","B10","B11","B11","B12","B10","B11","B12","B11","B10","B12","B10","B11","B12","B11","B12","B10","B11","B10","B11","B10","B11","B10","B11","B12","B12","B12","B12","B11","B12","B10","B10","B11","B11","B10","B12","B12","B11","B12")
+
+pca_df$Population <- spawn.names
+pca_df$Treatments <- treatment.labels
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Population, fill=Population)) +
+  geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+  scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
+guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24)) +
+  theme_minimal() +
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
+
 ```
-
 ```{r}
-png(filename="PC_all_rand.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.all.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Spawn")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
+png(filename="PC_all_rand1.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
+ggplot(pca_df, aes(x=PC1, y= PC2, color = Treatments, fill=Treatments)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+ theme_classic() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
+guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))+
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
+dev.off()
+png(filename="PC_all_rand1S.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
+ggplot(pca_df, aes(x=PC1, y= PC2, color = Population, fill=Population)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+ theme_classic() + scale_fill_manual(values=cbPaletteSmall,name="Spawn")+ 
+guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))+
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
 dev.off()
 ```
+
 ## All Initial Samples
-```{bash}
-source activate CASE
 
-mawk -f ../scripts/polarize_freqs all.dp20.rand_rc | grep -Ei '(A{20}|C{20}|G{20}|T{20})' -m 10000 | cut -f43-54  > all.is.dp20.rand.pool
+```{r}
+input.IS.rand <- input.all.rand.af[,34:45]
+afi_t <- t(input.IS.rand)
 
+pca_i_res <- prcomp(afi_t, center = TRUE, scale. = TRUE)
+
+# Get scores for plotting
+pca_i_df <- as.data.frame(pca_i_res$x)
+
+var_explained <- pca_i_res$sdev^2 / sum(pca_i_res$sdev^2) * 100
+
+pca_i_df$Population <- spawn.names[34:45]
+pca_i_df$Treatments <- c(rep("IS", 12))
+
+ggplot(pca_i_df, aes(x = PC1, y = PC2, color = Population, fill=Population)) +
+  geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+  scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
+guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24)) +
+  theme_classic() +
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
 
 ```
 
+
+
 ```{r}
-pool.data.all.is <- read.table("all.is.dp20.rand.pool")
-df.pool.all.is <- apply(pool.data.all.is, c(1, 2), function(x) eval(parse(text = x)))
-df_filtered.all.is <- df.pool.all.is[!apply(df.pool.all.is, 1, function(row) all(row == row[1])), ]
+png(filename="PC_all_IS_rand1.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
 
-pool.data2.all.is <- t(df_filtered.all.is)
-filename.all.is <- read.pcadapt(pool.data2.all.is, type = "pool")
-
-res.all.is.rand <- pcadapt(filename.all.is, K =5,min.maf = 0.0001)
-
-poplist.names <- c("B10","B11","B10","B11","B10","B11","B10","B11","B12","B12","B12","B12")
-p1.all.rand.df <- data.frame(res.all.is.rand$scores)
-colnames(p1.all.rand.df) <- c("PC1","PC2", "PC3", "PC4")
-p1.all.rand.df$POP <- poplist.names
-ggplot(p1.all.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+  scale_fill_manual(values=cbPaletteSmall,name="Spawn")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
+ggplot(pca_i_df, aes(x = PC1, y = PC2, color = Population, fill=Population)) +
+  geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+  scale_fill_manual(values=cbPaletteSmall,name="Spawn")+ 
+guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24)) +
+  theme_classic() +
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
 ```
 
+## Random loci for each individual blocks
 ```{r}
-png(filename="PC_all_IS_rand.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.all.rand.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Spawn")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
+
+# Optional: clean whitespace from column names (safe-guard)
+colnames(input.all.rand.af) <- trimws(colnames(input.all.rand.af))
+
+stages <- c("B10","B11","B12")
+
+for(stage in stages){
+  # match columns that end with "_B10" / "_B11" / "_B12"
+  cols_idx <- grep(paste0("_", stage, "$"), colnames(input.all.rand.af))
+  cat(sprintf("\n== Stage %s: found %d sample columns ==\n", stage, length(cols_idx)))
+  if(length(cols_idx) < 2){
+    warning(sprintf("Stage %s: less than 2 samples found - skipping PCA.", stage)); next
+  }
+
+  sub_mat <- input.all.rand.af[, cols_idx, drop = FALSE]
+  cat("  dim(sub_mat) (loci x samples):", dim(sub_mat), "\n")
+
+  # transpose so rows = samples, cols = loci (variables)
+  mat_t <- t(sub_mat)
+
+  # remove loci (columns) with zero variance across the samples in this stage
+  var_cols <- apply(mat_t, 2, var, na.rm = TRUE)
+  keep <- which(var_cols > 0)
+  removed_n <- sum(var_cols == 0)
+  cat("  loci removed (zero variance):", removed_n, "\n")
+
+  if(length(keep) < 2){
+    warning(sprintf("Stage %s: fewer than 2 variable loci after filtering - skipping PCA.", stage)); next
+  }
+  mat_t2 <- mat_t[, keep, drop = FALSE]
+  cat("  dim(mat_t2) (samples x retained loci):", dim(mat_t2), "\n")
+
+  # run PCA (now safe to scale)
+  pca_res <- prcomp(mat_t2, center = TRUE, scale. = TRUE)
+
+  # PCA dataframe
+  pca_df <- as.data.frame(pca_res$x)
+
+  # extract Treatments and Spawn from sample names (rownames of mat_t2)
+  sample_names <- rownames(mat_t2)
+  pca_df$Treatment <- sub("_.*", "", sample_names)   # text before first "_"
+  pca_df$Spawn     <- sub(".*_", "", sample_names)   # text after last "_"
+
+  # variance explained
+  var_explained <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
+
+  # choose palette fallback if cbPaletteSmall not defined
+  if(exists("cbPaletteSmall")){
+    fill_scale <- scale_fill_manual(values = cbPaletteSmall, name = "Treatment")
+  } else {
+    fill_scale <- scale_fill_brewer(palette = "Set1", name = "Treatment")
+  }
+
+  # plot
+  p <- ggplot(pca_df, aes(x = PC1, y = PC2, fill = Treatment)) +
+    geom_point(aes(alpha = 0.2), size = 6, shape = 21, color = "black") +
+    fill_scale +
+    guides(alpha = FALSE) +
+    theme_classic() +
+    theme(axis.title.x = element_text(size = 14),
+          axis.title.y = element_text(size = 14),
+          plot.title = element_text(hjust = 0.5)) +
+    labs(
+      title = paste0("PCA - ", stage),
+      x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+      y = paste0("PC2 (", round(var_explained[2], 1), "%)")
+    )
+
+  # save (adjust size/resolution or use png(...) if you prefer)
+  outfile <- paste0("PCA_all_rand_", stage, ".png")
+  ggsave(outfile, plot = p, width = 12, height = 7, dpi = 300)
+  cat("  saved:", outfile, "\n")
+}
 ```
 
 ### Venn Diagram for called loci
@@ -506,7 +506,7 @@ venn.plot <- draw.triple.venn(
 dev.off()
 ```
 
-# Individual Blocks
+# Individual Blocks for outlier testing
 #### B10
 ```{bash, eval=FALSE}
 source activate CASE
@@ -520,7 +520,7 @@ echo $AV_COV
 
 mawk -f ../scripts/add_cov_sync CASE.B10.ISsum3.sync | mawk -v x=$AV_COV '$7 >= x' | mawk '!/CHR/' | cut -f1-6 > CASE.B10.ISsum3nh.sync
 
-mawk -f ../scripts/add_cov_sync_IS CASE.B10.ISsum3.sync | mawk -v x=$AV_COV '$7 >= x'     > CASE.B10.ISsum3nh.cov.sync
+mawk -f ../scripts/add_cov_sync_IS CASE.B10.ISsum3.sync | mawk -v x=$AV_COV '$7 >= x'> CASE.B10.ISsum3nh.cov.sync
 
 
 paste CASE.dp20.Block10.cov.sync <(mawk -f ../scripts/add_cov_sync CASE.B10.ISsum3.sync ) | mawk -v x=$AV_COV '$29 >= x' | cut -f1-22 > temp.sync
@@ -564,9 +564,8 @@ paste <(cut -f1,2,3,4 CASE.B10.ISsum.sync) <(cut -f10 CASE.dp20.Block10.COV.sync
 head -1 CON.B10.sync
 tail -n +2 CON.B10.sync | mawk '!/0:0:0:0:0:0/' > CON.B10.input
 ```
+
 #### B11
-
-
 ```{bash, eval=FALSE}
 AV_COV=$(mawk -f ../scripts/add_cov_sync <(cut -f16-19 --complement CASE.dp20.Block11.cov.sync) | mawk '{sum=sum+$22} END {print sum/NR}')
 
@@ -979,42 +978,53 @@ ppsig1.s <- semi_join(rbind(ppsig.B10,ppsig.B11,ppsig.B12),singleton, by = "SNP"
 ```{bash, eval=FALSE}
 source activate CASE
 
-bash ../scripts/sum.sh <(cut -f1,2,3,42,44,46,48 CASE.All.Blocks.cov.sync) > CASE.B10.AB.ISsum.sync
-bash ../scripts/sum.sh <(cut -f1,2,3,43,45,47,49 CASE.All.Blocks.cov.sync) > CASE.B11.AB.ISsum.sync
-bash ../scripts/sum.sh <(cut -f1,2,3,50-53 CASE.All.Blocks.cov.sync) > CASE.B12.AB.ISsum.sync
+head -1 CASE.All.Blocks.cov.sync > h.temp
+tail -n +2 CASE.All.Blocks.cov.sync | sort -k1,1 -k2,2n > b.temp
+
+cat h.temp b.temp > CASE.All.Blocks.cov.s.sync
+rm h.temp b.temp
+cp CASE.All.Blocks.cov.sync CASE.All.Blocks.cov.s.sync
+
+bash ../scripts/sum.sh <(cut -f1,2,3,37,39,41,43 CASE.All.Blocks.cov.s.sync) > CASE.B10.AB.ISsum.sync
+bash ../scripts/sum.sh <(cut -f1,2,3,38,40,42,44 CASE.All.Blocks.cov.s.sync) > CASE.B11.AB.ISsum.sync
+bash ../scripts/sum.sh <(cut -f1,2,3,45-48 CASE.All.Blocks.cov.s.sync) > CASE.B12.AB.ISsum.sync
 
 
-paste CASE.All.Blocks.cov.sync <(mawk -f ../scripts/add_cov_sync CASE.B10.AB.ISsum.sync | cut -f5 ) <(mawk -f ../scripts/add_cov_sync CASE.B11.AB.ISsum.sync | cut -f 5) <(mawk -f ../scripts/add_cov_sync CASE.B12.AB.ISsum.sync | cut -f5) | mawk '$69 >72 && $70 > 72 && $71 > 72 && $66 > 1' | cut -f1-68 > CASE.All.Blocks.cov.fil.sync
+paste CASE.All.Blocks.cov.s.sync <(mawk -f ../scripts/add_cov_sync CASE.B10.AB.ISsum.sync | cut -f5 ) <(mawk -f ../scripts/add_cov_sync CASE.B11.AB.ISsum.sync | cut -f 5) <(mawk -f ../scripts/add_cov_sync CASE.B12.AB.ISsum.sync | cut -f5) | mawk '$63 >72 && $64 > 72 && $65 > 72 && $61 > 1' | cut -f1-62 > CASE.All.Blocks.cov.fil.sync
 
-bash ../scripts/sum.sh <(cut -f1,2,3,42,44,46 CASE.All.Blocks.cov.fil.sync) > CASE.B10.AB.ISsum.sync
-bash ../scripts/sum.sh <(cut -f1,2,3,43,45,47,49 CASE.All.Blocks.cov.fil.sync) > CASE.B11.AB.ISsum.sync
-bash ../scripts/sum.sh <(cut -f1,2,3,50-53 CASE.All.Blocks.cov.fil.sync) > CASE.B12.AB.ISsum.sync
+bash ../scripts/sum.sh <(cut -f1,2,3,37,39,41,43 CASE.All.Blocks.cov.fil.sync) > CASE.B10.AB.ISsum.sync
+bash ../scripts/sum.sh <(cut -f1,2,3,38,40,42,44 CASE.All.Blocks.cov.fil.sync) > CASE.B11.AB.ISsum.sync
+bash ../scripts/sum.sh <(cut -f1,2,3,45-48 CASE.All.Blocks.cov.fil.sync) > CASE.B12.AB.ISsum.sync
 
-mawk -f ../scripts/add_cov_sync <(cut -f1-3,4,8,10,18,22,25,30,34,36,56,57,60  CASE.All.Blocks.cov.fil.sync ) > B10.AB.cov.sync
-mawk -f ../scripts/add_cov_sync <(cut -f1-3,6,11,16,19,26,27,31,33,39,54,59,63 CASE.All.Blocks.cov.fil.sync) > B11.AB.cov.sync
-mawk -f ../scripts/add_cov_sync <(cut -f1-3,5,7,14,20,21,23,32,35,38,61,62,64 CASE.All.Blocks.cov.fil.sync) > B12.AB.cov.sync
+mawk -f ../scripts/add_cov_sync <(cut -f1-3,7,9,12,15,19,22,26,30,32,51,52,55  CASE.All.Blocks.cov.fil.sync ) > B10.AB.cov.sync
+mawk -f ../scripts/add_cov_sync <(cut -f1-3,5,10,14,16,23,24,27,29,35,49,54,58 CASE.All.Blocks.cov.fil.sync) > B11.AB.cov.sync
+#mawk -f ../scripts/add_cov_sync <(cut -f1-3,5,8,10,14,16,21,23,24,27,29,33,35,49,53,54,58 CASE.All.Blocks.cov.fil.sync) > B11.AB.cov.sync
 
-#mawk -f ../scripts/add_cov_sync <(cut -f1-3,4,8,10,18,22,25,30,34,36,42,44,46,48,56,57,60  CASE.All.Blocks.cov.fil.sync ) > B10.AB.cov.sync
-#mawk -f ../scripts/add_cov_sync <(cut -f1-3,6,11,16,19,26,27,31,33,39,43,45,47,49,54,59,63 CASE.All.Blocks.cov.fil.sync) > B11.AB.cov.sync
-#mawk -f ../scripts/add_cov_sync <(cut -f1-3,5,7,14,20,21,23,32,35,38,50,51,52,53,61,62,64 CASE.All.Blocks.cov.fil.sync) > B12.AB.cov.sync
+mawk -f ../scripts/add_cov_sync <(cut -f1-3,4,6,13,17,18,20,28,31,34,56,57,59 CASE.All.Blocks.cov.fil.sync) > B12.AB.cov.sync
+#mawk -f ../scripts/add_cov_sync <(cut -f1-3,4,6,11,13,17,18,20,25,28,31,34,36,50,56,57,59 CASE.All.Blocks.cov.fil.sync) > B12.AB.cov.sync
 
-paste CASE.B10.AB.ISsum.sync <(cut -f4 CASE.B10.AB.ISsum.sync) <(cut -f4 CASE.B10.AB.ISsum.sync)  > CASE.B10.AB.ISsum3.sync
+#paste CASE.B10.AB.ISsum.sync <(cut -f4 CASE.B10.AB.ISsum.sync) <(cut -f4 CASE.B10.AB.ISsum.sync)   > CASE.B10.AB.ISsum3.sync
 
-paste CASE.B11.AB.ISsum.sync <(cut -f4 CASE.B11.AB.ISsum.sync) <(cut -f4 CASE.B11.AB.ISsum.sync)  > CASE.B11.AB.ISsum4.sync
+#paste CASE.B11.AB.ISsum.sync <(cut -f4 CASE.B11.AB.ISsum.sync) <(cut -f4 CASE.B11.AB.ISsum.sync)  > CASE.B11.AB.ISsum4.sync
 
-paste CASE.B12.AB.ISsum.sync <(cut -f4 CASE.B12.AB.ISsum.sync) <(cut -f4 CASE.B12.AB.ISsum.sync)  > CASE.B12.AB.ISsum4.sync
+#paste CASE.B12.AB.ISsum.sync <(cut -f4 CASE.B12.AB.ISsum.sync) <(cut -f4 CASE.B12.AB.ISsum.sync)  > CASE.B12.AB.ISsum4.sync
+
+paste CASE.B10.AB.ISsum.sync <(cut -f4 CASE.B10.AB.ISsum.sync) <(cut -f4 CASE.B10.AB.ISsum.sync) <(cut -f4 CASE.B10.AB.ISsum.sync)  > CASE.B10.AB.ISsum3.sync
+paste CASE.B11.AB.ISsum.sync <(cut -f4 CASE.B11.AB.ISsum.sync) <(cut -f4 CASE.B11.AB.ISsum.sync) <(cut -f4 CASE.B11.AB.ISsum.sync)  > CASE.B11.AB.ISsum4.sync
+paste CASE.B12.AB.ISsum.sync <(cut -f4 CASE.B12.AB.ISsum.sync) <(cut -f4 CASE.B12.AB.ISsum.sync) <(cut -f4 CASE.B12.AB.ISsum.sync)  > CASE.B12.AB.ISsum4.sync
+
 
 mawk -f ../scripts/add_cov_sync_IS CASE.B10.AB.ISsum3.sync  > CASE.B10.AB.ISsum3.cov.sync
 mawk -f ../scripts/add_cov_sync_IS CASE.B11.AB.ISsum4.sync  > CASE.B11.AB.ISsum4.cov.sync
 mawk -f ../scripts/add_cov_sync_IS CASE.B12.AB.ISsum4.sync  > CASE.B12.AB.ISsum4.cov.sync
 
-paste B10.AB.cov.sync <(cut -f7 CASE.B10.AB.ISsum3.cov.sync) | mawk -v OFS='\t' '{if (NR > 1 && $18 > $19) {$18=$19; print $0} else {print $0}}' > temp.cov.sync
+paste B10.AB.cov.sync <(cut -f7 CASE.B10.AB.ISsum3.cov.sync) | mawk -v OFS='\t' '{if (NR > 1 && $19 > $20) {$19=$20; print $0} else {print $0}}' > temp.cov.sync
 cut -f1-18 temp.cov.sync > B10.AB.cov.sync
 
-paste B11.AB.cov.sync <(cut -f7 CASE.B11.AB.ISsum4.cov.sync) | mawk -v OFS='\t' '{if (NR > 1 && $18 > $19) {$18=$19; print $0} else {print $0}}' > temp.cov.sync
+paste B11.AB.cov.sync <(cut -f7 CASE.B11.AB.ISsum4.cov.sync) | mawk -v OFS='\t' '{if (NR > 1 && $19 > $20) {$19=$20; print $0} else {print $0}}' > temp.cov.sync
 cut -f1-18 temp.cov.sync > B11.AB.cov.sync
 
-paste B12.AB.cov.sync <(cut -f7 CASE.B12.AB.ISsum4.cov.sync) | mawk -v OFS='\t' '{if (NR > 1 && $18 > $19) {$18=$19; print $0} else {print $0}}' > temp.cov.sync
+paste B12.AB.cov.sync <(cut -f7 CASE.B12.AB.ISsum4.cov.sync) | mawk -v OFS='\t' '{if (NR > 1 && $19 > $20) {$19=$20; print $0} else {print $0}}' > temp.cov.sync
 cut -f1-18 temp.cov.sync > B12.AB.cov.sync
 rm temp.cov.sync
 
@@ -1025,75 +1035,76 @@ source activate random_draw
 python ../scripts/sub_sample.py CASE.B10.AB.ISsum3.cov.sync <( mawk '!/CHR/' CASE.B10.AB.ISsum3.sync) CASE.B10.ISs.AB.sync
 python ../scripts/sub_sample.py CASE.B11.AB.ISsum4.cov.sync <( mawk '!/CHR/' CASE.B11.AB.ISsum4.sync) CASE.B11.ISs.AB.sync
 python ../scripts/sub_sample.py CASE.B12.AB.ISsum4.cov.sync <(mawk '!/CHR/' CASE.B12.AB.ISsum4.sync) CASE.B12.ISs.AB.sync
+```
+```{bash}
+cat <(echo -e "CHROM\tPOS\tREF\tISB11_RS1\tISB11_RS2\tISB11_RS3\tISB11_RS4") CASE.B11.ISs.AB.sync > CASE.B11.ISsum.AB.sync
+cat <(echo -e "CHROM\tPOS\tREF\tISB10_RS1\tISB10_RS2\tISB10_RS3\tISB10_RS4") CASE.B10.ISs.AB.sync > CASE.B10.ISsum.AB.sync
+cat <(echo -e "CHROM\tPOS\tREF\tISB12_RS1\tISB12_RS2\tISB12_RS3\tISB12_RS4") CASE.B12.ISs.AB.sync > CASE.B12.ISsum.AB.sync
 
+paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f15 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f19 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f22 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f16 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f21 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f23 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B11.ISsum.AB.sync) <(cut -f24 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f17 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f18 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f20 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B12.ISsum.AB.sync) <(cut -f25 CASE.All.Blocks.cov.fil.sync) > CASE.AB.sync
 
-#python ../scripts/sub_sample.py B10.AB.cov.sync <( mawk '!/CHR/' CASE.B10.AB.ISsum3.sync) CASE.B10.ISs.AB.sync
-#python ../scripts/sub_sample.py B11.AB.cov.sync <( mawk '!/CHR/' CASE.B11.AB.ISsum4.sync) CASE.B11.ISs.AB.sync
-#python ../scripts/sub_sample.py B12.AB.cov.sync <(mawk '!/CHR/' CASE.B12.AB.ISsum4.sync) CASE.B12.ISs.AB.sync
-
-
-wait 
-
-cat <(echo -e "CHROM\tPOS\tREF\tISB11_RS1\tISB11_RS2\tISB11_RS3") CASE.B11.ISs.AB.sync > CASE.B11.ISsum.AB.sync
-cat <(echo -e "CHROM\tPOS\tREF\tISB10_RS1\tISB10_RS2\tISB10_RS3") CASE.B10.ISs.AB.sync > CASE.B10.ISsum.AB.sync
-cat <(echo -e "CHROM\tPOS\tREF\tISB12_RS1\tISB12_RS2\tISB12_RS3") CASE.B12.ISs.AB.sync > CASE.B12.ISsum.AB.sync
-
-paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f18 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f22 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f25 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f19 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f26 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f27 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f20 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f21 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f23 CASE.All.Blocks.cov.fil.sync) > CASE.AB.sync
+#paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f15 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f19 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f22 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f16 CASE.All.Blocks.cov.fil.sync)  <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f23 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f24 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f17 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f18 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f20 CASE.All.Blocks.cov.fil.sync)  > CASE.AB.sync
 
 tail -n +2 CASE.AB.sync | mawk '$2 != 74609903 && $2 != 93711267 && $2 != 36030885' > CASE.AB.input 
 
-paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f4 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f8 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f10 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f6 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f11 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f16 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f5 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f7 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f14 CASE.All.Blocks.cov.fil.sync) > CA.AB.sync
+paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f7 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f9 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f12 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f5 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f8 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f10 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B11.ISsum.AB.sync) <(cut -f14 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f4 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f6 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f11 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B12.ISsum.AB.sync) <(cut -f13 CASE.All.Blocks.cov.fil.sync) > CA.AB.sync
+
+#paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f7 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f9 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f12 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f5 CASE.All.Blocks.cov.fil.sync)  <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f10 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f14 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f4 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f6 CASE.All.Blocks.cov.fil.sync)  <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f13 CASE.All.Blocks.cov.fil.sync) > CA.AB.sync
 
 tail -n +2 CA.AB.sync | mawk '$2 != 93711267 && $2 != 59024150 && $2 != 2532550'> CA.AB.input 
 
-paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f30 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f34 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f36 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f31 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f33 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f39 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f32 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f35 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f38 CASE.All.Blocks.cov.fil.sync) > CON.AB.sync
+paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f26 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f30 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f32 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f27 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f29 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f33 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B11.ISsum.AB.sync) <(cut -f35 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f28 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f31 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f34 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B12.ISsum.AB.sync) <(cut -f36 CASE.All.Blocks.cov.fil.sync) > CON.AB.sync
+
+#paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f26 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f30 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f32 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f27 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f29 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f35 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f28 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f31 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f34 CASE.All.Blocks.cov.fil.sync)  > CON.AB.sync
 
 tail -n +2 CON.AB.sync | mawk '$2 != 34804390 && $2 != 54895214 && $2 !=  49000140 && $2 != 15140923' > CON.AB.input 
 
-paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f56 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f57 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f60 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f54 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f59 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f63 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f61 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f62 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f64 CASE.All.Blocks.cov.fil.sync) > SE.AB.sync
+paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f51 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f52 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f55 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f49 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f53 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f54 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B11.ISsum.AB.sync) <(cut -f58 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f50 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f56 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f57 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B12.ISsum.AB.sync) <(cut -f59 CASE.All.Blocks.cov.fil.sync) > SE.AB.sync
+
+#paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f51 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f52 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f55 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f49 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f54 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f58 CASE.All.Blocks.cov.fil.sync)  <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f56 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f57 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f59 CASE.All.Blocks.cov.fil.sync) > SE.AB.sync
 
 tail -n +2 SE.AB.sync | mawk '$2 != 67902213 && $2 != 19828063 && $2 != 93711267 ' > SE.AB.input 
 
 ```
 #### Calculate p-values
 ```{r}
-ca.ab.sync <- read.sync(file="CA.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
-ca.ab.cov <- coverage(ca.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
-ca.ab.af <- af(ca.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
+ca.ab.sync <- read.sync(file="CA.AB.input",gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3,3,4 ,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+ca.ab.cov <- coverage(ca.ab.sync,gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+ca.ab.af <- af(ca.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 
-case.ab.sync <- read.sync(file="CASE.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
-case.ab.cov <- coverage(case.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
-case.ab.af <- af(case.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
+case.ab.sync <- read.sync(file="CASE.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+case.ab.cov <- coverage(case.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+case.ab.af <- af(case.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 
-se.ab.sync <- read.sync(file="SE.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
-se.ab.cov <- coverage(se.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
-se.ab.af <- af(se.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
+se.ab.sync <- read.sync(file="SE.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+se.ab.cov <- coverage(se.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+se.ab.af <- af(se.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 
-con.ab.sync <- read.sync(file="CON.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
-con.ab.cov <- coverage(con.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
-con.ab.af <- af(con.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ))
+con.ab.sync <- read.sync(file="CON.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+con.ab.cov <- coverage(con.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+con.ab.af <- af(con.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 ```
 
 ```{r}
-ca.ab.pvals <- adapted.cmh.test(freq=ca.ab.af, coverage=ca.ab.cov, Ne=c(250,250,250,1000,1000,1000,1000,1000,1000), gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ), poolSize=rep(c(40000,10000), ncol(ca.ab.af)/2), MeanStart = TRUE, mincov =14)
+ca.ab.pvals <- adapted.cmh.test(freq=ca.ab.af, coverage=ca.ab.cov, Ne=c(250,250,250,1000,1000,1000,1000,1000,1000,1000,1000), gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3,3,4 ,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ), poolSize=rep(c(40000,10000), ncol(ca.ab.af)/2), MeanStart = TRUE, mincov =14)
 
 pcadf <- as.data.table(cbind(row.names(ca.ab.af),ca.ab.pvals))
 colnames(pcadf) <- c("Locus","PVAL")
 pcadf$GROUP <- "PCA"
 
-case.ab.pvals <- adapted.cmh.test(freq=case.ab.af, coverage=case.ab.cov, Ne=c(250,250,250,1000,1000,1000,1000,1000,1000), gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ), poolSize=rep(c(40000,10000), ncol(case.ab.af)/2), MeanStart = TRUE, mincov =14)
+case.ab.pvals <- adapted.cmh.test(freq=case.ab.af, coverage=case.ab.cov, Ne=c(250,250,250,1000,1000,1000,1000,1000,1000,1000,1000), gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3,3,4 ,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ), poolSize=rep(c(40000,10000), ncol(case.ab.af)/2), MeanStart = TRUE, mincov =14)
 
 pcasedf <- as.data.table(cbind(row.names(case.ab.af),case.ab.pvals))
 colnames(pcasedf) <- c("Locus","PVAL")
 pcasedf$GROUP <- "PCASE"
 
-se.ab.pvals <- adapted.cmh.test(freq=se.ab.af, coverage=se.ab.cov, Ne=c(250,250,250,1000,1000,1000,1000,1000,1000), gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ), poolSize=rep(c(40000,10000), ncol(se.ab.af)/2), MeanStart = TRUE, mincov =14)
+se.ab.pvals <- adapted.cmh.test(freq=se.ab.af, coverage=se.ab.cov, Ne=c(250,250,250,1000,1000,1000,1000,1000,1000,1000,1000), gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3,3,4 ,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ), poolSize=rep(c(40000,10000), ncol(se.ab.af)/2), MeanStart = TRUE, mincov =14)
 
 psedf <- as.data.table(cbind(row.names(se.ab.af),se.ab.pvals))
 colnames(psedf) <- c("Locus","PVAL")
 psedf$GROUP <- "PSE"
 
-con.ab.pvals <- adapted.cmh.test(freq=con.ab.af, coverage=con.ab.cov, Ne=c(250,250,250,1000,1000,1000,1000,1000,1000), gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9 ), poolSize=rep(c(40000,10000), ncol(con.ab.af)/2), MeanStart = TRUE, mincov =14)
+con.ab.pvals <- adapted.cmh.test(freq=con.ab.af, coverage=con.ab.cov, Ne=c(250,250,250,1000,1000,1000,1000,1000,1000,1000,1000), gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3,3,4 ,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ), poolSize=rep(c(40000,10000), ncol(con.ab.af)/2), MeanStart = TRUE, mincov =14)
 
 pcondf <- as.data.table(cbind(row.names(con.ab.af),con.ab.pvals)) 
 colnames(pcondf) <- c("Locus","PVAL")
@@ -1140,7 +1151,7 @@ alpha2 =0.1
 
 
 ppsig1.ab <-Significat_subset(AB.pv,alphaAB,alpha2)
-write.table(ppsig1.ab, "Sig.Loci.FDR01.AB", sep="\t", row.names = FALSE, quote = FALSE)
+write.table(ppsig1.ab, "Sig.Loci.FDR0001.AB", sep="\t", row.names = FALSE, quote = FALSE)
 
 conpp.AB <- subset(AB.pv, QCON < 0.001)
 all_con <- bind_rows(conpp1,conpp.AB) %>% group_by(SNP) %>% filter(n()>1)
@@ -1300,7 +1311,9 @@ bedtools intersect -wb -a CASE.Significant.B12.loci.bed -b ~/CASE/analysis/sorte
 
 ```{r}
 source("../gprofiler2W.R")
-set_base_url("http://biit.cs.ut.ee/gprofiler_beta")
+#library(gprofiler2)
+#set_base_url("http://biit.cs.ut.ee/gprofiler_beta")
+
 
 gostres <- gost(query = list("CASE" = read.table("Sig.loci.1.CASE.LOC",header=FALSE), "SE" = read.table("Sig.loci.1.SE.LOC",header=FALSE), "CA" = read.table("Sig.loci.1.CA.LOC",header=FALSE)), organism = "cvgca002022765v4", multi_query = FALSE,user_threshold = 0.05,domain_scope = "known")
 
@@ -1352,18 +1365,20 @@ xbreaks <- sapply(dfmsplit,function(x) {
     return(x$index[midpoint])
 })
 b10.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+  
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
   geom_point(data=dfmo, fill=cbPaletteSmall4[4], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[4])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour = FALSE,alpha=FALSE, fill = FALSE, size = FALSE) +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_size_continuous(range = c(0.25,3)) +
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,50))+
   ggtitle("Block 10") +
   labs(x = "Chromosome") +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
   scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE)+
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 b11.h <- subset(total.sig,  BLOCK == "11" & Sig.CASE == TRUE)
 b11.c <- subset(B11.pv, QCON < 0.1)
@@ -1397,19 +1412,21 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b11.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+  
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
   #geom_point(aes(x=index, y=log10(QCON), colour = as.factor(chrom_alt), alpha=0.5, shape = Group))+  
   geom_point(data=dfmo, fill=cbPaletteSmall4[4], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[4])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_size_continuous(range = c(0.25,3)) +
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,8))+
   labs(x = "Chromosome") +
   ggtitle("Block 11") +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
   scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) +    
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 
 b12.h <- subset(total.sig,  BLOCK == "12" & Sig.CASE == TRUE)
@@ -1443,7 +1460,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b12.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+  
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
   geom_point(data=dfmo, fill=cbPaletteSmall4[4], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[4])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
@@ -1451,20 +1468,99 @@ b12.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
   labs(x = "Chromosome") +
   ggtitle("Block 12") +
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
   scale_size_continuous(range = c(0.25,3), limits=c(0,20)) +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
   scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) + 
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 ```
 ```{r}
 png(filename="CASEmpHighlighted.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
 
 (b10.CASE / b11.CASE /b12.CASE )  + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect') 
+
+null <- dev.off()
+```
+
+```{r}
+png(filename="CASEmpHighlightedBB.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
+
+
+
+(b10.CASE / b11.CASE /b12.CASE )  + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect') & theme_black()
 #(b10.CASE / b11.CASE /b12.CASE )  + plot_annotation(tag_levels = 'A') & theme_black()
 #man+scale_fill_manual(values = c("#009E73","#E69F00", "#0072B2"),name = "Legend")
 null <- dev.off()
 ```
+
+```{r}
+png(filename="CASEmpHighlightedBB12.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
+
+b12.CASEbb <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
+  geom_point(aes(alpha=marker, shape=Group, size = marker, show.legend = FALSE))+  
+  geom_point(data=dfmo, fill=cbPaletteSmall4[4], aes(x=index, y=marker, shape=Group, size=8),  color = cbPaletteSmall4[4], alpha=0.9)+
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
+  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
+  #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
+  scale_y_continuous(expand = c(0,0),limits=c(0,15))+ #Removes two singleton loci at end of CHR 5
+  labs(x = "Chromosome") +
+  theme_black()+
+  theme(legend.text = element_text(size = 18), legend.title = element_text(size=24), legend.position = "bottom")+ 
+  scale_size_continuous(range = c(0.5,5), limits= c(0,15)) +
+  ggtitle("Block 12") +
+  labs(y=expression(-Log10(q-value))) +
+  scale_shape_manual(values=c(15,21,16,17))+
+  scale_color_manual(values=c("grey", "dark grey"))+
+  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 6, linetype =0) ) )
+#guides(color = guide_legend(override.aes = list(color = c("grey", "grey"))))
+b12.CASEbb
+null <- dev.off()
+```
+
+```{r}
+ball.h <- subset(total.sig, Sig.CASE == TRUE)
+ball.h <- ball.h %>%
+  group_by(SNP) %>%
+  slice_min(QCASE)
+
+man <-ggman(ball.h, pvalue="QCASE", chr="CHR", snp="SNP",bp="BP", relative.positions = TRUE ,sigLine = NA, pointSize=1.5,title = "", alpha = 0.5)
+
+dfm <- man[[1]]
+
+dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
+
+dfmo <- semi_join(dfm, b12.h, by = "SNP")
+dfmo$Group <- "Outlier"
+
+dfmsplit <- split(dfm, dfm$chrom)
+xbreaks <- sapply(dfmsplit,function(x) {
+    midpoint <- length(x$index)/2
+    if(midpoint <1) midpoint <- 1
+    return(x$index[midpoint])
+})
+
+ball.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
+  geom_point(data=dfm, fill=cbPaletteSmall4[4], aes(x=index, y=marker, size=marker),  color = cbPaletteSmall4[4])+
+  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
+  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
+  #scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
+  labs(x = "Chromosome") +
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
+  scale_size_continuous(range = c(0.25,3), limits=c(0,20)) +
+  theme_classic()+
+  labs(y=expression(-Log10(q-value))) +
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+
+png(filename="CASEmpBB.png", type="cairo",units="px", width=4800, height=1000, res=300, bg="transparent")  
+ball.CASE + theme_black()
+null <- dev.off()
+
+```
+
 #### SE
 ```{r, warning =FALSE, eval = FALSE}
 b10.h <- subset(total.sig,  BLOCK == "10" & Sig.SE == TRUE)
@@ -1498,7 +1594,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b10.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+  
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
   geom_point(data=dfmo, fill=cbPaletteSmall4[3], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[3])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
@@ -1506,10 +1602,12 @@ b10.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   ggtitle("Block 10") +
   labs(x = "Chromosome") +
   scale_size_continuous(range = c(0.25,3)) +
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,50))+
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
   scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) + 
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 b11.h <- subset(total.sig,  BLOCK == "11" & Sig.SE == TRUE)
 b11.c <- subset(B11.pv, QCON < 0.1)
@@ -1543,7 +1641,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b11.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+  
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
   #geom_point(aes(x=index, y=log10(QCON), colour = as.factor(chrom_alt), alpha=0.5, shape = Group))+  
   geom_point(data=dfmo, fill=cbPaletteSmall4[3], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[3])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
@@ -1555,7 +1653,8 @@ b11.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   scale_size_continuous(range = c(0.25,3)) +
   labs(y=expression(-Log10(q-value))) +
   scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) + 
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 
 b12.h <- subset(total.sig,  BLOCK == "12" & Sig.SE == TRUE)
@@ -1589,7 +1688,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b12.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+  
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
   geom_point(data=dfmo, fill=cbPaletteSmall4[3], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[3])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
@@ -1601,7 +1700,8 @@ b12.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
   scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) +
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 ```
 ```{r}
@@ -1611,6 +1711,85 @@ png(filename="SEmpHighlighted.png", type="cairo",units="px", width=5600, height=
 #(b10.SE / b11.SE /b12.SE )  + plot_annotation(tag_levels = 'A') & theme_black()
 #man+scale_fill_manual(values = c("#009E73","#E69F00", "#0072B2"),name = "Legend")
 null <- dev.off()
+```
+
+```{r}
+png(filename="SEmpHighlightedBB.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
+
+b10.SE.b <- b10.SE +theme_black()
+b11.SE.b <- b11.SE +theme_black()
+b12.SE.b <- b12.SE +theme_black()
+
+(b10.SE.b / b11.SE.b /b12.SE.b )  + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect') & theme_black()
+#(b10.SE / b11.SE /b12.SE )  + plot_annotation(tag_levels = 'A') & theme_black()
+#man+scale_fill_manual(values = c("#009E73","#E69F00", "#0072B2"),name = "Legend")
+null <- dev.off()
+```
+
+```{r}
+png(filename="SEmpHighlightedBB12.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
+
+b12.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
+  geom_point(aes(alpha=marker, shape=Group, size = marker, show.legend = FALSE))+  
+  geom_point(data=dfmo, fill=cbPaletteSmall4[3], aes(x=index, y=marker, shape=Group, size=8),  color = cbPaletteSmall4[3])+
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,15))+
+  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
+  #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
+  scale_y_continuous(expand = c(0,0),limits=c(0,15))+ #Removes two singleton loci at end of CHR 5
+  labs(x = "Chromosome") +
+  theme_black()+
+  theme(legend.text = element_text(size = 18), legend.title = element_text(size=24), legend.position = "bottom")+ 
+  scale_size_continuous(range = c(0.5,5), limits= c(0,15)) +
+  ggtitle("Block 12") +
+  labs(y=expression(-Log10(q-value))) +
+  scale_shape_manual(values=c(15,21,16,17))+
+  scale_color_manual(values=c("grey", "dark grey"))+
+  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 6, linetype =0) ) )
+#guides(color = guide_legend(override.aes = list(color = c("grey", "grey"))))
+b12.SE
+null <- dev.off()
+```
+
+```{r}
+ball.h <- subset(total.sig, Sig.SE == TRUE)
+ball.h <- ball.h %>%
+  group_by(SNP) %>%
+  slice_min(QSE)
+
+man <-ggman(ball.h, pvalue="QSE", chr="CHR", snp="SNP",bp="BP", relative.positions = TRUE ,sigLine = NA, pointSize=1.5,title = "", alpha = 0.5)
+
+dfm <- man[[1]]
+
+dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
+
+dfmo <- semi_join(dfm, b12.h, by = "SNP")
+dfmo$Group <- "Outlier"
+
+dfmsplit <- split(dfm, dfm$chrom)
+xbreaks <- sapply(dfmsplit,function(x) {
+    midpoint <- length(x$index)/2
+    if(midpoint <1) midpoint <- 1
+    return(x$index[midpoint])
+})
+
+ball.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
+  geom_point(data=dfm, fill=cbPaletteSmall4[4], aes(x=index, y=marker, size=marker),  color = cbPaletteSmall4[3])+
+  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
+  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
+  #scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
+  labs(x = "Chromosome") +
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
+  scale_size_continuous(range = c(0.25,3), limits=c(0,20)) +
+  theme_classic()+
+  labs(y=expression(-Log10(q-value))) +
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+
+png(filename="SEmpBB.png", type="cairo",units="px", width=4800, height=1000, res=300, bg="transparent")  
+ball.SE + theme_black()
+null <- dev.off()
+
 ```
 
 #### CA
@@ -1646,7 +1825,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b10.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+  
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
   geom_point(data=dfmo, fill=cbPaletteSmall4[2], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[2])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
@@ -1658,7 +1837,8 @@ b10.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
   scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) +
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 b11.h <- subset(total.sig,  BLOCK == "11" & Sig.CA == TRUE)
 b11.c <- subset(B11.pv, QCON < 0.1)
@@ -1692,7 +1872,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b11.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
   #geom_point(aes(x=index, y=log10(QCON), colour = as.factor(chrom_alt), alpha=0.5, shape = Group))+  
   geom_point(data=dfmo, fill=cbPaletteSmall4[2], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[2])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
@@ -1704,7 +1884,8 @@ b11.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
   scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) + 
+  guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 
 b12.h <- subset(total.sig,  BLOCK == "12" & Sig.CA == TRUE)
@@ -1738,7 +1919,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b12.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=0.5, shape=Group, size = marker))+ 
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+ 
   geom_point(data=dfmo, fill=cbPaletteSmall4[2], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[2])+
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
@@ -1761,6 +1942,60 @@ png(filename="CAmpHighlighted.png", type="cairo",units="px", width=5600, height=
 null <- dev.off()
 ```
 
+```{r}
+png(filename="CAmpHighlightedBB.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
+
+b10.CA.b <- b10.CA +theme_black()
+b11.CA.b <- b11.CA +theme_black()
+b12.CA.b <- b12.CA +theme_black()
+
+(b10.CA.b / b11.CA.b /b12.CA.b )  + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect') & theme_black()
+#(b10.SE / b11.SE /b12.SE )  + plot_annotation(tag_levels = 'A') & theme_black()
+#man+scale_fill_manual(values = c("#009E73","#E69F00", "#0072B2"),name = "Legend")
+null <- dev.off()
+```
+
+
+```{r}
+ball.h <- subset(total.sig, Sig.CA == TRUE)
+ball.h <- ball.h %>%
+  group_by(SNP) %>%
+  slice_min(QCA)
+
+man <-ggman(ball.h, pvalue="QSE", chr="CHR", snp="SNP",bp="BP", relative.positions = TRUE ,sigLine = NA, pointSize=1.5,title = "", alpha = 0.5)
+
+dfm <- man[[1]]
+
+dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
+
+dfmo <- semi_join(dfm, b12.h, by = "SNP")
+dfmo$Group <- "Outlier"
+
+dfmsplit <- split(dfm, dfm$chrom)
+xbreaks <- sapply(dfmsplit,function(x) {
+    midpoint <- length(x$index)/2
+    if(midpoint <1) midpoint <- 1
+    return(x$index[midpoint])
+})
+
+ball.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
+  geom_point(data=dfm, fill=cbPaletteSmall4[4], aes(x=index, y=marker, size=marker),  color = cbPaletteSmall4[2])+
+  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
+  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
+  #scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
+  labs(x = "Chromosome") +
+  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
+  scale_size_continuous(range = c(0.25,3), limits=c(0,20)) +
+  theme_classic()+
+  labs(y=expression(-Log10(q-value))) +
+  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+
+png(filename="CAmpBB.png", type="cairo",units="px", width=4800, height=1000, res=300, bg="transparent")  
+ball.CA + theme_black()
+null <- dev.off()
+
+```
 
 # Venn Diagrams
 ```{r}
@@ -1788,7 +2023,11 @@ venn.plot <- draw.triple.venn(
   category = c("CA", "SE", "CASE"),
   fill = cbPaletteSmall3,cat.cex = rep(5, 3),
   cat.col = cbPaletteSmall3, label.col = rep("white", 7))
+
 dev.off()
+grid.draw(venn.plot)
+grid.newpage()
+
 png(filename="VenBO.png", type="cairo",units="px", width=3000, height=3000, res=200, bg="transparent")
 venn.plot <- draw.triple.venn(
   area1=sig.CA, area2=sig.SE, area3=sig.CASE, 
@@ -1996,7 +2235,8 @@ venn.plot <- draw.triple.venn(
   fill = cbPaletteSmall3,cat.cex = rep(5, 3),
   cat.col = cbPaletteSmall3, label.col = rep("white", 7))
 dev.off()
-
+grid.draw(venn.plot)
+grid.newpage()
 ```
 ### B10
 ```{r}
@@ -2100,60 +2340,359 @@ dev.off()
 
 ```
 # PCA
+```{bash, eval = FALSE}
+source activate CASE
 
-```{bash, eval=FALSE}
+mawk '!/CHR/' Total.Significant.Loci | cut -f2,3 | sort | uniq > TSL.pca.filter
+
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' TSL.pca.filter CASE.All.Blocks.cov.sync | cut --complement -f60- > outlier.pca.sync
+```
+
+```{r}
+input.all.outlier <- read.sync(file="outlier.pca.sync", gen=seq(1,56), repl=seq(1,56), polarization="rising")
+
+
+input.all.outlier.af <- af(input.all.outlier,gen=seq(1,56), repl=seq(1,56))
+treatment.labels <- c(rep("CA", 11),rep("CASE", 11),rep("CON", 11),rep("IS", 12),rep("SE", 11))
+spawn.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12","B11","B10","B11","B12","B12","B10","B12","B11","B10","B11","B11","B12","B10","B11","B12","B11","B10","B12","B10","B11","B12","B11","B12","B10","B11","B10","B11","B10","B11","B10","B11","B12","B12","B12","B12","B11","B12","B10","B10","B11","B11","B10","B12","B12","B11","B12")
+
+colnames(input.all.outlier.af) <- paste(treatment.labels,spawn.names,sep="_")
+
+
+# Perform PCA
+af_t <- t(input.all.outlier.af)
+
+pca_res <- prcomp(af_t, center = TRUE, scale. = TRUE)
+
+# Get scores for plotting
+pca_df <- as.data.frame(pca_res$x)
+#pca_df$locus <- rownames(input.all.outlier.af)  # keep locus IDs if you have them
+
+var_explained <- pca_res$sdev^2 / sum(pca_res$sdev^2) * 100
+
+# Example: if you have a vector "pop_group" the same length as rows
+
+treatment.labels <- c(rep("CA", 11),rep("CASE", 11),rep("CON", 11),rep("IS", 12),rep("SE", 11))
+spawn.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12","B11","B10","B11","B12","B12","B10","B12","B11","B10","B11","B11","B12","B10","B11","B12","B11","B10","B12","B10","B11","B12","B11","B12","B10","B11","B10","B11","B10","B11","B10","B11","B12","B12","B12","B12","B11","B12","B10","B10","B11","B11","B10","B12","B12","B11","B12")
+
+pca_df$Population <- spawn.names
+pca_df$Treatments <- treatment.labels
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Population, fill=Population)) +
+  geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+  scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
+guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24)) +
+  theme_minimal() +
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
+
+```
+```{r}
+png(filename="PC1.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
+ggplot(pca_df, aes(x=PC1, y= PC2, color = Treatments, fill=Treatments)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+ theme_classic() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ 
+guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))+
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
+dev.off()
+png(filename="PC1b.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
+ggplot(pca_df, aes(x=PC1, y= PC2, color = Population, fill=Population)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="black")+ theme_classic() + scale_fill_manual(values=cbPaletteSmall,name="Spawn")+ 
+guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))+
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
+dev.off()
+```
+## Outlier loci for each individual blocks
+```{bash, eval = FALSE}
 source activate CASE
 
 
-
-bcftools view --threads 40 ../raw.vcf/B10.CASE.FIL.vcf.gz -R <(cut -f2,3 Total.Significant.Loci | tail -n +2 | sort | uniq )| mawk '!/\.:\.:\./' > B10.total.outlier.CASE.dp20.vcf &
-
-bcftools view --threads 40 ../raw.vcf/B11.CASE.FIL.vcf.gz -R <(cut -f2,3 Total.Significant.Loci | tail -n +2 | sort | uniq )| mawk '!/\.:\.:\./' > B11.total.outlier.CASE.dp20.vcf &
-
-bcftools view --threads 40 ../raw.vcf/B11.CASE.FIL.vcf.gz -R <(mawk '$16 == 11 || $16 ==12' Total.Significant.Loci | cut -f2,3 | sort | uniq )| mawk '!/\.:\.:\./' > B11.B11.outlier.CASE.dp20.vcf
-
-bcftools view --threads 40 ../raw.vcf/B12.CASE.FIL.vcf.gz -R <(cut -f2,3 Total.Significant.Loci | tail -n +2 | sort | uniq )| mawk '!/\.:\.:\./' > B12.total.outlier.CASE.dp20.vcf &
-
-bcftools view --threads 40 -S <(grep -v 1.G ../raw.vcf/samples | grep -v J17B10 | grep -v J05B10) ../raw.vcf/CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz -R <(cut -f2,3 Total.Significant.Loci | tail -n +2 | sort | uniq )| mawk '!/\.:\.:\./' > total.outlier.CASE.dp20.vcf 
-
-wait
-
-python2 ~/CASE/VCFtoPopPool.py B10.total.outlier.CASE.dp20.vcf B10.total.outlier.sync
-python2 ~/CASE/VCFtoPopPool.py B11.total.outlier.CASE.dp20.vcf B11.total.outlier.sync
-python2 ~/CASE/VCFtoPopPool.py B12.total.outlier.CASE.dp20.vcf B12.total.outlier.sync 
-
-python2 ~/CASE/VCFtoPopPool.py B11.B11.outlier.CASE.dp20.vcf B11.B11.outlier.sync
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' TSL.pca.filter CASE.All.Blocks.sync | cut --complement -f60- > outlier.pca.block.sync
+```
 
 
-python2 ~/CASE/VCFtoPopPool.py total.outlier.CASE.dp20.vcf AB.total.outlier.sync
+```{r}
+b10.pos <- read.table("B10.pos")
+b11.pos <- read.table("B11.pos")
+b12.pos <- read.table("B12.pos")
+
+input.all.outlier.block <- read.sync(file="outlier.pca.block.sync", gen=seq(1,56), repl=seq(1,56), polarization="rising")
+
+treatment.labels <- c(rep("CA", 11),rep("CASE", 11),rep("CON", 11),rep("IS", 12),rep("SE", 11))
+spawn.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12","B11","B10","B11","B12","B12","B10","B12","B11","B10","B11","B11","B12","B10","B11","B12","B11","B10","B12","B10","B11","B12","B11","B12","B10","B11","B10","B11","B10","B11","B10","B11","B12","B12","B12","B12","B11","B12","B10","B10","B11","B11","B10","B12","B12","B11","B12")
+input.all.outlier.block.af <- af(input.all.outlier.block,gen=seq(1,56), repl=seq(1,56))
+colnames(input.all.outlier.block.af) <- paste(treatment.labels,spawn.names,sep="_")
+
+```
 
 
-mawk '!/CHR/' AB.total.outlier.sync > AB.total.outlier.input
-mawk '!/CHR/' B10.total.outlier.sync > B10.total.outlier.input
-mawk '!/CHR/' B11.total.outlier.sync > B11.total.outlier.input
-mawk '!/CHR/' B11.B11.outlier.sync > B11.B11.outlier.input
-mawk '!/CHR/' B12.total.outlier.sync > B12.total.outlier.input
+```{r}
 
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input  B10.total.outlier.input --min-count 1 --min-coverage 1 --output-prefix B10.total.outlier --max-coverage 50000 &
+colnames(input.all.outlier.block.af) <- trimws(colnames(input.all.outlier.block.af))
 
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input  B11.total.outlier.input --min-count 1 --min-coverage 1 --output-prefix B11.total.outlier --max-coverage 50000 &
+stages <- c("B10","B11","B12")
 
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input  B11.B11.outlier.input --min-count 1 --min-coverage 1 --output-prefix B11.B11.outlier --max-coverage 50000 &
+for(stage in stages){
+  # Get the position data for this stage
+  pos_data <- get(paste0(tolower(stage), ".pos"))
+  
+  # Use the chromosome identifiers directly from .pos file (no mapping needed)
+  stage_loci <- paste(pos_data[,1], pos_data[,2], sep = ".")
+  
+  # Filter rows based on the constructed loci identifiers
+  row_idx <- rownames(input.all.outlier.block.af) %in% stage_loci
+  
+  # Match columns that end with "_B10" / "_B11" / "_B12"
+  cols_idx <- grep(paste0("_", stage, "$"), colnames(input.all.outlier.block.af))
+  
+  cat(sprintf("\n== Stage %s ==\n", stage))
+  cat("  Found loci in .pos file:", length(stage_loci), "\n")
+  cat("  Matching loci in data:", sum(row_idx), "\n")
+  cat("  Found sample columns:", length(cols_idx), "\n")
+  
+  if(length(cols_idx) < 2){
+    warning(sprintf("Stage %s: less than 2 samples found - skipping PCA.", stage))
+    next
+  }
+  
+  if(sum(row_idx) < 2){
+    warning(sprintf("Stage %s: less than 2 matching loci found - skipping PCA.", stage))
+    next
+  }
+  
+  # Apply both row and column filtering
+  sub_mat <- input.all.outlier.block.af[row_idx, cols_idx, drop = FALSE]
+  cat("  dim(sub_mat) (loci x samples):", dim(sub_mat), "\n")
+  
+  # Transpose so rows = samples, cols = loci (variables)
+  mat_t <- t(sub_mat)
+  
+  # Remove loci (columns) with zero variance across the samples in this stage
+  var_cols <- apply(mat_t, 2, var, na.rm = TRUE)
+  keep <- which(var_cols > 0)
+  removed_n <- sum(var_cols == 0)
+  cat("  loci removed (zero variance):", removed_n, "\n")
+  
+  if(length(keep) < 2){
+    warning(sprintf("Stage %s: fewer than 2 variable loci after filtering - skipping PCA.", stage))
+    next
+  }
+  
+  mat_t2 <- mat_t[, keep, drop = FALSE]
+  cat("  dim(mat_t2) (samples x retained loci):", dim(mat_t2), "\n")
+  
+  # Run PCA (now safe to scale)
+  pca_res <- prcomp(mat_t2, center = TRUE, scale. = FALSE)
+  
+  # PCA dataframe
+  pca_df <- as.data.frame(pca_res$x)
+  
+  # Extract Treatments and Spawn from sample names (rownames of mat_t2)
+  sample_names <- rownames(mat_t2)
+  pca_df$Treatment <- sub("_.*", "", sample_names)   # text before first "_"
+  pca_df$Spawn     <- sub(".*_", "", sample_names)   # text after last "_"
+  
+  # Variance explained
+  var_explained <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
+  
+  # Choose palette fallback if cbPaletteSmall not defined
+  if(exists("cbPaletteSmall")){
+    fill_scale <- scale_fill_manual(values = cbPaletteSmall, name = "Treatment")
+  } else {
+    fill_scale <- scale_fill_brewer(palette = "Set1", name = "Treatment")
+  }
+  
+  # Plot
+  p <- ggplot(pca_df, aes(x = PC1, y = PC2, fill = Treatment)) +
+    geom_point(aes(alpha = 0.2), size = 6, shape = 21, color = "black") +
+    fill_scale +
+    guides(alpha = FALSE) +
+    theme_classic() +
+    theme(axis.title.x = element_text(size = 14),
+          axis.title.y = element_text(size = 14),
+          plot.title = element_text(hjust = 0.5)) +
+    labs(
+      title = paste0("PCA - ", stage),
+      x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+      y = paste0("PC2 (", round(var_explained[2], 1), "%)")
+    )
+  
+  # Save (adjust size/resolution or use png(...) if you prefer)
+  outfile <- paste0("PC_", stage, ".png")
+  ggsave(outfile, plot = p, width = 12, height = 7, dpi = 300)
+  cat("  saved:", outfile, "\n")
+}
+```
 
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input  B12.total.outlier.input --min-count 1 --min-coverage 1 --output-prefix B12.total.outlier --max-coverage 50000 &
+```{r}
 
-../scripts/assessPool/scripts/p2/snp-frequency-diff.pl --input  AB.total.outlier.input --min-count 1 --min-coverage 1 --output-prefix AB.total.outlier --max-coverage 50000 
+# Base R approach for matrix named input.all.outlier.af
+# Get column indices for each group
+is_b10_cols <- grep("^IS_B10", colnames(input.all.outlier.af))
+is_b11_cols <- grep("^IS_B11", colnames(input.all.outlier.af))
+is_b12_cols <- grep("^IS_B12", colnames(input.all.outlier.af))
 
-mawk -f ../scripts/polarize_freqs AB.total.outlier_rc | cut -f10-65 | mawk '!/maa/' > AB.total.outlier.CASE.dp20.pool
+# Calculate row means and add as new columns
+input.all.outlier.af <- cbind(input.all.outlier.af, 
+                              ISM_B10 = rowMeans(input.all.outlier.af[, is_b10_cols], na.rm = TRUE),
+                              ISM_B11 = rowMeans(input.all.outlier.af[, is_b11_cols], na.rm = TRUE),
+                              ISM_B12 = rowMeans(input.all.outlier.af[, is_b12_cols], na.rm = TRUE))
+```
 
-mawk -f ../scripts/polarize_freqs B10.total.outlier_rc | cut -f10-25 | mawk '!/maa/' > B10.total.outlier.CASE.dp20.pool
+```{r}
+# Create new matrix with only delta columns (ISM values subtracted from corresponding B10/B11/B12 columns)
+# (excluding IS columns from the subtraction)
 
-mawk -f ../scripts/polarize_freqs B11.total.outlier_rc | cut -f10-29 | mawk '!/maa/' > B11.total.outlier.CASE.dp20.pool
+# Get column indices for each group (excluding IS columns)
+b10_cols <- grep("B10$", colnames(input.all.outlier.af))
+b10_cols <- b10_cols[!grepl("^IS", colnames(input.all.outlier.af)[b10_cols])]
 
-mawk -f ../scripts/polarize_freqs B11.B11.outlier_rc | cut -f10-29 | mawk '!/maa/' > B11.B11.outlier.CASE.dp20.pool
+b11_cols <- grep("B11$", colnames(input.all.outlier.af))
+b11_cols <- b11_cols[!grepl("^IS", colnames(input.all.outlier.af)[b11_cols])]
 
-mawk -f ../scripts/polarize_freqs B12.total.outlier_rc | cut -f10-29 | mawk '!/maa/' > B12.total.outlier.CASE.dp20.pool
+b12_cols <- grep("B12$", colnames(input.all.outlier.af))
+b12_cols <- b12_cols[!grepl("^IS", colnames(input.all.outlier.af)[b12_cols])]
 
+# Combine all target columns
+all_target_cols <- c(b10_cols, b11_cols, b12_cols)
+
+# Create vectors to store results and column names
+delta_values <- list()
+delta_names <- character()
+
+# Process B10 columns
+for(col in b10_cols) {
+  delta_values[[length(delta_values) + 1]] <- input.all.outlier.af[, "ISM_B10"] - input.all.outlier.af[, col]
+  delta_names <- c(delta_names, paste0(colnames(input.all.outlier.af)[col], "_delta"))
+}
+
+# Process B11 columns
+for(col in b11_cols) {
+  delta_values[[length(delta_values) + 1]] <- input.all.outlier.af[, "ISM_B11"] - input.all.outlier.af[, col]
+  delta_names <- c(delta_names, paste0(colnames(input.all.outlier.af)[col], "_delta"))
+}
+
+# Process B12 columns
+for(col in b12_cols) {
+  delta_values[[length(delta_values) + 1]] <- input.all.outlier.af[, "ISM_B12"] - input.all.outlier.af[, col]
+  delta_names <- c(delta_names, paste0(colnames(input.all.outlier.af)[col], "_delta"))
+}
+
+# Create the final matrix
+new_matrix <- do.call(cbind, delta_values)
+rownames(new_matrix) <- rownames(input.all.outlier.af)
+colnames(new_matrix) <- delta_names
+
+```
+
+
+
+```{r}
+# Perform PCA
+af_t <- t(new_matrix)
+
+pca_res <- prcomp(af_t, center = TRUE, scale. = FALSE)
+
+# Get scores for plotting
+pca_df <- as.data.frame(pca_res$x)
+#pca_df$locus <- rownames(input.all.outlier.af)  # keep locus IDs if you have them
+
+var_explained <- pca_res$sdev^2 / sum(pca_res$sdev^2) * 100
+
+# Example: if you have a vector "pop_group" the same length as rows
+
+treatment.labels <- c(rep("CA", 3),rep("CASE", 3),rep("CON", 3),rep("SE", 3),rep("CA", 4),rep("CASE", 4),rep("CON", 4),rep("SE", 4),rep("CA", 4),rep("CASE", 4),rep("CON", 4),rep("SE", 4))
+spawn.names <- c(rep("B10",12),rep("B11",16),rep("B12",16))
+
+pca_df$Population <- spawn.names
+pca_df$Treatments <- treatment.labels
+
+ggplot(pca_df, aes(x = PC1, y = PC2, fill = Treatments, shape = as.factor(Population))) +
+  geom_point(size = 8, color = "black", alpha = 0.5) + 
+  scale_fill_manual(values = cbPaletteSmall[-4], name = "Treatment") + 
+  scale_shape_manual(values = c(21, 22, 23), name = "Spawn") +
+  guides(fill = guide_legend(override.aes = list(shape = 21)), shape= guide_legend(override.aes= list(fill=cbPaletteSmall[4]))) +
+  theme_minimal() +
+  theme(axis.title.x = element_text(size = 24), axis.title.y = element_text(size = 24)) +
+  labs(
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+    title = "PCA of Allele Frequencies"
+  )
+
+```
+```{r}
+library(ggplot2)
+
+af_t <- t(new_matrix)  # rows = samples
+
+meta <- data.frame(
+  Spawn = spawn.names,
+  Treatment = treatment.labels,
+  stringsAsFactors = FALSE
+)
+
+stopifnot(nrow(af_t) == nrow(meta))
+
+idx_by_spawn <- split(seq_len(nrow(af_t)), meta$Spawn)
+
+run_pca_and_plot_one_spawn <- function(idx, spawn_id) {
+  X <- af_t[idx, , drop = FALSE]
+  meta_spawn <- meta[idx, , drop = FALSE]
+
+  # Keep only numeric columns (in case something non-numeric slipped in)
+  X <- X[, vapply(as.data.frame(X), is.numeric, logical(1)), drop = FALSE]
+
+  # Drop columns that are all NA
+  keep_not_all_na <- colSums(!is.na(X)) > 0
+  X <- X[, keep_not_all_na, drop = FALSE]
+
+  # Drop zero-variance columns (within this spawn)
+  sds <- apply(X, 2, sd, na.rm = TRUE)
+  keep_var <- is.finite(sds) & sds > 0
+  X <- X[, keep_var, drop = FALSE]
+
+  if (ncol(X) < 2) {
+    stop(sprintf("Spawn %s: <2 variable columns remain after filtering; cannot run PCA.", spawn_id))
+  }
+
+  # PCA (now scaling is safe)
+  pca_res <- prcomp(X, center = TRUE, scale. = FALSE)
+
+  pca_df <- as.data.frame(pca_res$x)
+  pca_df$Treatment <- meta_spawn$Treatment
+  pca_df$Spawn <- spawn_id
+
+  var_explained <- (pca_res$sdev^2 / sum(pca_res$sdev^2)) * 100
+
+  ggplot(pca_df, aes(PC1, PC2, fill = Treatment)) +
+    geom_point(size = 8, color = "black", alpha = 0.5, shape = 21) +
+    scale_fill_manual(values = cbPaletteSmall[-4], name = "Treatment") +
+    theme_minimal() +
+    theme(axis.title.x = element_text(size = 24),
+          axis.title.y = element_text(size = 24)) +
+    labs(
+      x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+      y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
+      title = paste0("PCA of Allele Frequencies - ", spawn_id)
+    )
+}
+
+plots_by_spawn <- mapply(
+  FUN = run_pca_and_plot_one_spawn,
+  idx = idx_by_spawn,
+  spawn_id = names(idx_by_spawn),
+  SIMPLIFY = FALSE
+)
+
+lapply(plots_by_spawn, print)
 
 ```
 
@@ -2161,119 +2700,362 @@ mawk -f ../scripts/polarize_freqs B12.total.outlier_rc | cut -f10-29 | mawk '!/m
 
 
 ```{r}
-pool.data <- read.table("AB.total.outlier.CASE.dp20.pool")
-pool.data.b10 <- read.table("B10.total.outlier.CASE.dp20.pool")
-pool.data.b11 <- read.table("B11.total.outlier.CASE.dp20.pool")
-pool.data.b11o <- read.table("B11.B11.outlier.CASE.dp20.pool")
-pool.data.b12 <- read.table("B12.total.outlier.CASE.dp20.pool")
+library(ggplot2)
 
-df.pool <- apply(pool.data, c(1, 2), function(x) eval(parse(text = x)))
-df.pool.b10 <- apply(pool.data.b10, c(1, 2), function(x) eval(parse(text = x)))
-df.pool.b11 <- apply(pool.data.b11, c(1, 2), function(x) eval(parse(text = x)))
-df.pool.b11o <- apply(pool.data.b11o, c(1, 2), function(x) eval(parse(text = x)))
-df.pool.b12 <- apply(pool.data.b12, c(1, 2), function(x) eval(parse(text = x)))
+delta_mat <- new_matrix
+spawns <- c("B10","B11","B12")
 
-pool.data2 <- t(df.pool)
-pool.data2.b10 <- t(df.pool.b10)
-pool.data2.b11 <- t(df.pool.b11)
-pool.data2.b11o <- t(df.pool.b11o)
-pool.data2.b12 <- t(df.pool.b12)
+# mean across duplicate-named replicate columns
+row_mean_by_exact_name <- function(mat, nm) {
+  idx <- which(colnames(mat) == nm)
+  if (length(idx) == 0) stop(paste("No columns found named:", nm))
+  rowMeans(as.matrix(mat[, idx, drop = FALSE]), na.rm = TRUE)
+}
 
+make_pair_plot <- function(d, xvar, yvar, title_prefix) {
+  r <- cor(d[[xvar]], d[[yvar]], use = "complete.obs", method = "pearson")
+  n <- sum(complete.cases(d[[xvar]], d[[yvar]]))
 
-filename <- read.pcadapt(pool.data2, type = "pool")
-res <- pcadapt(filename, min.maf = 0.1)
+  ggplot(d, aes(x = .data[[xvar]], y = .data[[yvar]])) +
+    geom_hline(yintercept = 0, color = "grey75", linewidth = 0.4) +
+    geom_vline(xintercept = 0, color = "grey75", linewidth = 0.4) +
+    geom_point(alpha = 0.25, size = 0.9) +
+    theme_minimal() +
+    labs(
+      title = paste0(title_prefix, " | r = ", round(r, 3), " | n = ", n),
+      x = xvar,
+      y = yvar
+    )
+}
 
-filename.b10 <- read.pcadapt(pool.data2.b10, type = "pool")
+make_color_plot <- function(d, spawn) {
+  r <- cor(d$CA, d$SE, use = "complete.obs", method = "pearson")
+  n <- sum(complete.cases(d$CA, d$SE, d$CASE))
 
-filename.b11 <- read.pcadapt(pool.data2.b11, type = "pool")
-filename.b11o <- read.pcadapt(pool.data2.b11o, type = "pool")
+  ggplot(d, aes(x = CA, y = SE, color = CASE)) +
+    geom_hline(yintercept = 0, color = "grey75", linewidth = 0.4) +
+    geom_vline(xintercept = 0, color = "grey75", linewidth = 0.4) +
+    geom_point(alpha = 0.85, size = 1.2) +
+    scale_color_gradient2(
+      low = "#2b83ba", mid = "grey90", high = "#d7191c", midpoint = 0
+    ) +
+    theme_minimal() +
+    labs(
+      title = paste0("Spawn ", spawn, ": ΔAF CA vs ΔAF SE (color = ΔAF CASE) | r(CA,SE) = ", round(r, 3), " | n = ", n),
+      x = "ΔAF CA",
+      y = "ΔAF SE",
+      color = "ΔAF CASE"
+    )
+}
 
-filename.b12 <- read.pcadapt(pool.data2.b12, type = "pool")
+plots <- list()
 
+for (sp in spawns) {
 
+  CA   <- row_mean_by_exact_name(delta_mat, paste0("CA_", sp, "_delta"))
+  CASE <- row_mean_by_exact_name(delta_mat, paste0("CASE_", sp, "_delta"))
+  SE   <- row_mean_by_exact_name(delta_mat, paste0("SE_", sp, "_delta"))
 
-par(mfrow = c(2, 2))
-for (i in 1:4)
-  plot(res$loadings[, i], pch = 19, cex = .3, ylab = paste0("Loadings PC", i))
+  d <- data.frame(
+    SNP = rownames(delta_mat),
+    CA = CA,
+    CASE = CASE,
+    SE = SE,
+    stringsAsFactors = FALSE
+  )
+  d <- d[complete.cases(d$CA, d$CASE, d$SE), ]
 
+  p_case_ca <- make_pair_plot(d, "CA", "CASE", paste0("Spawn ", sp, ": ΔAF CASE vs ΔAF CA"))
+  p_case_se <- make_pair_plot(d, "SE", "CASE", paste0("Spawn ", sp, ": ΔAF CASE vs ΔAF SE"))
+  p_ca_se_c <- make_color_plot(d, sp)
+
+  plots[[sp]] <- list(
+    CASE_vs_CA = p_case_ca,
+    CASE_vs_SE = p_case_se,
+    CA_vs_SE_col_CASE = p_ca_se_c
+  )
+
+  # Print the three plots for this spawn
+  print(p_case_ca)
+  print(p_case_se)
+  print(p_ca_se_c)
+}
+
+# Access later, e.g.:
+# plots[["B10"]]$CA_vs_SE_col_CASE
 ```
 
 ```{r}
-plot(res,option="screeplot")
+library(ggplot2)
+
+delta_mat <- new_matrix
+colnames(delta_mat) <- trimws(colnames(delta_mat))
+spawns <- c("B10","B11","B12")
+
+# mean across duplicate-named replicate columns
+row_mean_by_exact_name <- function(mat, nm) {
+  idx <- which(colnames(mat) == nm)
+  if (length(idx) == 0) stop(paste("No columns found named:", nm))
+  rowMeans(as.matrix(mat[, idx, drop = FALSE]), na.rm = TRUE)
+}
+
+make_pair_plot <- function(d, xvar, yvar, title_prefix) {
+  r <- cor(d[[xvar]], d[[yvar]], use = "complete.obs", method = "pearson")
+  n <- sum(complete.cases(d[[xvar]], d[[yvar]]))
+
+  ggplot(d, aes(x = .data[[xvar]], y = .data[[yvar]])) +
+    geom_hline(yintercept = 0, color = "grey75", linewidth = 0.4) +
+    geom_vline(xintercept = 0, color = "grey75", linewidth = 0.4) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    geom_point(alpha = 0.25, size = 0.9) +
+    theme_minimal() +
+    labs(
+      title = paste0(title_prefix, " | r = ", round(r, 3), " | n = ", n),
+      x = xvar,
+      y = yvar
+    )
+}
+
+make_color_plot <- function(d, spawn) {
+  r <- cor(d$CA, d$SE, use = "complete.obs", method = "pearson")
+  n <- sum(complete.cases(d$CA, d$SE, d$CASE))
+
+  ggplot(d, aes(x = CA, y = SE, color = CASE)) +
+    geom_hline(yintercept = 0, color = "grey75", linewidth = 0.4) +
+    geom_vline(xintercept = 0, color = "grey75", linewidth = 0.4) +
+    geom_point(alpha = 0.85, size = 1.2) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    scale_color_gradient2(low = "#2b83ba", mid = "grey90", high = "#d7191c", midpoint = 0) +
+    theme_minimal() +
+    labs(
+      title = paste0(
+        "Spawn ", spawn, ": ΔAF CA vs ΔAF SE (color = ΔAF CASE) | r(CA,SE) = ",
+        round(r, 3), " | n = ", n
+      ),
+      x = "ΔAF CA",
+      y = "ΔAF SE",
+      color = "ΔAF CASE"
+    )
+}
+
+plots <- list()
+
+for (sp in spawns) {
+
+  # --- FILTER ROWS BY SPAWN'S .pos LOCI (already loaded objects) ---
+  pos_data <- get(paste0(tolower(sp), ".pos"))  # b10.pos, b11.pos, b12.pos
+  stage_loci <- paste(pos_data[, 1], pos_data[, 2], sep = ".")
+
+  sub_mat <- delta_mat[rownames(delta_mat) %in% stage_loci, , drop = FALSE]
+
+  cat("\\n== Spawn", sp, "==\\n")
+  cat("  loci in .pos:", length(stage_loci), "\\n")
+  cat("  loci kept in matrix:", nrow(sub_mat), "\\n")
+
+  # --- Compute replicate means on the filtered matrix ---
+  CA   <- row_mean_by_exact_name(sub_mat, paste0("CA_", sp, "_delta"))
+  CASE <- row_mean_by_exact_name(sub_mat, paste0("CASE_", sp, "_delta"))
+  SE   <- row_mean_by_exact_name(sub_mat, paste0("SE_", sp, "_delta"))
+
+  d <- data.frame(
+    SNP = rownames(sub_mat),
+    CA = CA,
+    CASE = CASE,
+    SE = SE,
+    stringsAsFactors = FALSE
+  )
+  d <- d[complete.cases(d$CA, d$CASE, d$SE), ]
+
+  p_case_ca <- make_pair_plot(d, "CA", "CASE", paste0("Spawn ", sp, ": ΔAF CASE vs ΔAF CA"))
+  p_case_se <- make_pair_plot(d, "SE", "CASE", paste0("Spawn ", sp, ": ΔAF CASE vs ΔAF SE"))
+  p_ca_se_c <- make_color_plot(d, sp)
+
+  plots[[sp]] <- list(
+    CASE_vs_CA = p_case_ca,
+    CASE_vs_SE = p_case_se,
+    CA_vs_SE_col_CASE = p_ca_se_c,
+    data = d
+  )
+
+  print(p_case_ca)
+  print(p_case_se)
+  print(p_ca_se_c)
+}
+
+# Example:
+# plots[["B10"]]$CA_vs_SE_col_CASE
+
+```
+```{r}
+library(ggplot2)
+
+af_mat <- input.all.outlier.af   # or input.all.rand.af
+spawns <- c("B10", "B11", "B12")
+
+# Mean across ALL replicate columns with the exact same name (handles duplicate colnames)
+af_mean <- function(mat, trt, sp) {
+  nm <- paste0(trt, "_", sp)
+  idx <- which(colnames(mat) == nm)
+  if (length(idx) == 0) stop(paste("No columns found named:", nm))
+  rowMeans(as.matrix(mat[, idx, drop = FALSE]), na.rm = TRUE)
+}
+
+pair_plot <- function(d, x, y, title) {
+  r <- cor(d[[x]], d[[y]], use = "complete.obs", method = "pearson")
+  n <- sum(complete.cases(d[[x]], d[[y]]))
+
+  ggplot(d, aes(x = .data[[x]], y = .data[[y]])) +
+    geom_point(alpha = 0.30, size = 1.0) +
+    theme_minimal() +
+    labs(
+      title = paste0(title, " | r = ", round(r, 3), " | n = ", n),
+      x = paste0("AF ", x, " (mean across reps)"),
+      y = paste0("AF ", y, " (mean across reps)")
+    )
+}
+
+color_plot <- function(d, sp) {
+  r <- cor(d$CA, d$SE, use = "complete.obs", method = "pearson")
+  n <- sum(complete.cases(d$CA, d$SE, d$CASE))
+
+  ggplot(d, aes(x = CA, y = SE, color = CASE)) +
+    geom_point(alpha = 0.55, size = 1.2) +
+    scale_color_gradient2(
+      low = "#2b83ba", mid = "grey90", high = "#d7191c",
+      midpoint = median(d$CASE, na.rm = TRUE)
+    ) +
+    theme_minimal() +
+    labs(
+      title = paste0("Spawn ", sp, ": CA vs SE (color = CASE) | r(CA,SE) = ", round(r, 3), " | n = ", n),
+      x = "AF CA (mean across reps)",
+      y = "AF SE (mean across reps)",
+      color = "AF CASE\\n(mean)"
+    )
+}
+
+plots <- list()
+
+for (sp in spawns) {
+
+  # Average across replicates within each treatment×spawn
+  d <- data.frame(
+    SNP  = rownames(af_mat),
+    CA   = af_mean(af_mat, "CA", sp),
+    CASE = af_mean(af_mat, "CASE", sp),
+    SE   = af_mean(af_mat, "SE", sp),
+    stringsAsFactors = FALSE
+  )
+  d <- d[complete.cases(d$CA, d$CASE, d$SE), ]
+
+  p_case_ca <- pair_plot(d, x = "CA", y = "CASE", title = paste0("Spawn ", sp, ": CASE vs CA (AF)"))
+  p_case_se <- pair_plot(d, x = "SE", y = "CASE", title = paste0("Spawn ", sp, ": CASE vs SE (AF)"))
+  p_ca_se_c <- color_plot(d, sp)
+
+  plots[[sp]] <- list(
+    CASE_vs_CA = p_case_ca,
+    CASE_vs_SE = p_case_se,
+    CA_vs_SE_col_CASE = p_ca_se_c,
+    data = d
+  )
+
+  print(p_case_ca)
+  print(p_case_se)
+  print(p_ca_se_c)
+}
+
+# Example access:
+# plots[["B10"]]$data
+# plots[["B12"]]$CA_vs_SE_col_CASE
 ```
 
 
 ```{r}
-res <- pcadapt(filename, K =4,min.maf = 0.001)
-poplist.names <- c(rep("CA", 11),rep("CASE", 11),rep("CON", 11),rep("IS", 12),rep("SE", 11))
-p1 <- plot(res, option = "scores", i = 1, j = 2, pop = poplist.names)
-p1.df <- data.frame(res$scores)
-colnames(p1.df) <- c("PC1","PC2", "PC3", "PC4")
-p1.df$POP <- poplist.names
-png(filename="PC1.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Treatmen")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
-plot(res, option = "scores", i = 1, j = 2, pop = poplist.names)
+library(ggplot2)
 
-poplist.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12","B11","B10","B11","B12","B12","B10","B12","B11","B10","B11","B11","B12","B10","B11","B12","B11","B10","B12","B10","B11","B12","B11","B12","B10","B11","B10","B11","B10","B11","B10","B11","B12","B12","B12","B12","B11","B12","B10","B10","B11","B11","B10","B12","B12","B11","B12")
-p1 <- plot(res, option = "scores", i = 1, j = 2, pop = poplist.names)
-p1.df <- data.frame(res$scores)
-colnames(p1.df) <- c("PC1","PC2", "PC3", "PC4")
-p1.df$POP <- poplist.names
-png(filename="PC1b.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =10,shape=21, col="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Spawn")+ 
-guides(alpha=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
+colnames(input.all.outlier.af) <- trimws(colnames(input.all.outlier.af))
 
+stages <- c("B10","B11","B12")
+
+subset_by_stage <- function(mat, stage) {
+  pos_data <- get(paste0(tolower(stage), ".pos"))   # b10.pos, b11.pos, b12.pos
+  stage_loci <- paste(pos_data[, 1], pos_data[, 2], sep = ".")
+
+  row_idx  <- rownames(mat) %in% stage_loci
+  cols_idx <- grep(paste0(stage, "$"), colnames(mat))  # columns ending with B10/B11/B12
+
+  cat(sprintf("\\n== Stage %s ==\\n", stage))
+  cat("  Found loci in .pos file:", length(stage_loci), "\\n")
+  cat("  Matching loci in data:", sum(row_idx), "\\n")
+  cat("  Found sample columns:", length(cols_idx), "\\n")
+
+  mat[row_idx, cols_idx, drop = FALSE]
+}
+
+mean_by_exact_colname <- function(mat, colname_exact) {
+  idx <- which(colnames(mat) == colname_exact)  # handles duplicate column names
+  if (length(idx) == 0) stop(paste("No columns found named:", colname_exact))
+  rowMeans(as.matrix(mat[, idx, drop = FALSE]), na.rm = TRUE)
+}
+
+plots <- list()
+
+for (stage in stages) {
+
+  sub_mat <- subset_by_stage(input.all.outlier.af, stage)
+
+  # mean AF across replicates for each treatment at this stage
+  d <- data.frame(
+    SNP  = rownames(sub_mat),
+    CA   = mean_by_exact_colname(sub_mat, paste0("CA_", stage)),
+    CASE = mean_by_exact_colname(sub_mat, paste0("CASE_", stage)),
+    SE   = mean_by_exact_colname(sub_mat, paste0("SE_", stage)),
+    stringsAsFactors = FALSE
+  )
+  d <- d[complete.cases(d$CA, d$CASE, d$SE), ]
+
+  r_case_ca <- cor(d$CASE, d$CA, use = "complete.obs")
+  r_case_se <- cor(d$CASE, d$SE, use = "complete.obs")
+  r_ca_se   <- cor(d$CA, d$SE,   use = "complete.obs")
+
+  p1 <- ggplot(d, aes(x = CA, y = CASE)) +
+    geom_point(alpha = 0.30, size = 1.0) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    theme_minimal() +
+    labs(
+      title = paste0(stage, " AF (filtered loci): CASE vs CA | r=", round(r_case_ca, 3)),
+      x = "CA AF (mean across reps)",
+      y = "CASE AF (mean across reps)"
+    )
+
+  p2 <- ggplot(d, aes(x = SE, y = CASE)) +
+    geom_point(alpha = 0.30, size = 1.0) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed")+
+    theme_minimal() +
+    labs(
+      title = paste0(stage, " AF (filtered loci): CASE vs SE | r=", round(r_case_se, 3)),
+      x = "SE AF (mean across reps)",
+      y = "CASE AF (mean across reps)"
+    )
+
+  p3 <- ggplot(d, aes(x = CA, y = SE, color = CASE)) +
+    geom_point(alpha = 0.55, size = 1.1) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed")+
+    scale_color_gradient2(
+      low = "#2b83ba", mid = "grey90", high = "#d7191c",
+      midpoint = median(d$CASE, na.rm = TRUE)
+    ) +
+    theme_minimal() +
+    labs(
+      title = paste0(stage, " AF (filtered loci): CA vs SE (color=CASE) | r(CA,SE)=", round(r_ca_se, 3)),
+      x = "CA AF (mean across reps)",
+      y = "SE AF (mean across reps)",
+      color = "CASE AF\\n(mean)"
+    )
+
+  print(p1); print(p2); print(p3)
+
+  plots[[stage]] <- list(data = d, CASE_vs_CA = p1, CASE_vs_SE = p2, CA_vs_SE_col_CASE = p3)
+}
 ```
-
-
-
-```{r}
-res.b10 <- pcadapt(filename.b10, K = 3, min.maf=0.00)
-poplist.names <- c(rep("CA", 3),rep("CASE", 3),rep("CON", 3),rep("IS", 4),rep("SE", 3))
-p1 <- plot(res.b10, option = "scores", i = 1, j = 2, pop = poplist.names)
-p1.df <- data.frame(res.b10$scores)
-colnames(p1.df) <- c("PC1","PC2", "PC3")
-p1.df$POP <- poplist.names
-png(filename="PCb10.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent") 
-ggplot(p1.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =12, shape =21, color="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ guides(alpha=FALSE, fill=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
-
-res.b11 <- pcadapt(filename.b11, K = 3, min.maf=0.01)
-poplist.names <- c(rep("CA", 4),rep("CASE", 4),rep("CON", 4),rep("IS", 4),rep("SE", 4))
-p1 <- plot(res.b11, option = "scores", i = 1, j = 2, pop = poplist.names)
-p1.df <- data.frame(res.b11$scores)
-p1.df <- p1.df[-2,]
-colnames(p1.df) <- c("PC1","PC2", "PC3")
-p1.df$POP <- poplist.names[-2]
-png(filename="PCb11.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.df, aes(x=PC1, y= PC2, fill = POP)) + geom_point(aes(alpha=0.2), shape=21, size =12, color="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ guides(alpha=FALSE,fill=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
-
-res.b11o <- pcadapt(filename.b11o, K = 3, min.maf=0.01)
-poplist.names <- c(rep("CA", 4),rep("CASE", 4),rep("CON", 4),rep("IS", 4),rep("SE", 4))
-p1 <- plot(res.b11o, option = "scores", i = 1, j = 2, pop = poplist.names)
-p1.df <- data.frame(res.b11o$scores)
-p1.df <- p1.df[-2,]
-colnames(p1.df) <- c("PC1","PC2", "PC3")
-p1.df$POP <- poplist.names[-2]
-png(filename="PCb11o.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.df, aes(x=PC1, y= PC2, fill = POP)) + geom_point(aes(alpha=0.2), shape=21, size =12, color="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ guides(alpha=FALSE,fill=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
-
-
-res.b12 <- pcadapt(filename.b12, K = 3, min.maf=0.0)
-poplist.names <- c(rep("CA", 4),rep("CASE", 4),rep("CON", 4),rep("IS", 4),rep("SE", 4))
-p1 <- plot(res.b12, option = "scores", i = 1, j = 2, pop = poplist.names)
-p1.df <- data.frame(res.b12$scores)
-colnames(p1.df) <- c("PC1","PC2", "PC3")
-p1.df$POP <- poplist.names
-png(filename="PCb12.png", type="cairo",units="px", width=5400, height=3000, res=300, bg="transparent")
-ggplot(p1.df, aes(x=PC1, y= PC2, fill= POP)) + geom_point(aes(alpha=0.2), size =12,shape=21, color="white")+ theme_black() + scale_fill_manual(values=cbPaletteSmall,name="Treatment")+ guides(alpha=FALSE, fill=FALSE) +theme(axis.title.x = element_text(size = 24),axis.title.y = element_text(size = 24))
-dev.off()
-```
-
 
 
