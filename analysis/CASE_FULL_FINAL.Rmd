@@ -1004,6 +1004,17 @@ apply_treatment_filter <- function(df, keep_treatment) {
   df
 }
 
+# top1pct_filter: within the already-significant loci (df), retain only those
+# whose treatment q-value falls in the top 1% of that significant set.
+# The quantile is intentionally computed on df, not the full distribution.
+top1pct_filter <- function(df) {
+  subset(df,
+    (Sig.CASE == TRUE & QCASE < quantile(df$QCASE, na.rm = TRUE, probs = 0.01)) |
+    (Sig.CA   == TRUE & QCA   < quantile(df$QCA,   na.rm = TRUE, probs = 0.01)) |
+    (Sig.SE   == TRUE & QSE   < quantile(df$QSE,   na.rm = TRUE, probs = 0.01))
+  )
+}
+
 # ── Step 3: Pool all three blocks (unfiltered) ───────────────────────────────
 # pp1 is used later to identify CON-significant SNPs across the per-block data
 pp1 <- rbind(B10.pv, B11.pv, B12.pv)
@@ -1075,9 +1086,10 @@ multi_sig.SE   <- subset(ppsig3.FDR05, Sig.SE   == TRUE) %>%
 multi_sig <- rbind(multi_sig.CA, multi_sig.CASE, multi_sig.SE)
 write.table(multi_sig, "Sig.Loci.2", sep = "\t", row.names = FALSE, quote = FALSE)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TIER C: q < 0.01, per-block outputs + 2-block filter (Sig.Loci.FDR01.*)
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Per-block q < 0.01 intermediates ─────────────────────────────────────────
+# ppsig3.FDR01 feeds both Tier D and the cross-dataset tier.
+# The 2-block filter (multi_sig.01) has been dropped as redundant with multi_sig:
+# any locus at q < 0.01 in 2+ blocks is already captured at q < 0.05 in 2+ blocks.
 alpha  <- 0.01
 alpha2 <- 0.10
 B11.alpha <- alpha * 2  # Block 11 correction: 0.02
@@ -1090,32 +1102,18 @@ ppsig.B10.01$BLOCK <- 10
 ppsig.B11.01$BLOCK <- 11
 ppsig.B12.01$BLOCK <- 12
 
-# Write per-block and combined outputs
 ppsig3.FDR01 <- rbind(ppsig.B10.01, ppsig.B11.01, ppsig.B12.01)
-write.table(ppsig3.FDR01,    "Sig.Loci.FDR01.1",      sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(ppsig.B10.01,    "Sig.Loci.FDR01.Block10", sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(ppsig.B11.01,    "Sig.Loci.FDR01.Block11", sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(ppsig.B12.01,    "Sig.Loci.FDR01.Block12", sep = "\t", row.names = FALSE, quote = FALSE)
-
-# 2-block filter at q < 0.01
-multi_sig.CA.01   <- subset(ppsig3.FDR01, Sig.CA   == TRUE) %>%
-                       group_by(SNP) %>% filter(n() > 1) %>%
-                       apply_treatment_filter("Sig.CA")
-
-multi_sig.CASE.01 <- subset(ppsig3.FDR01, Sig.CASE == TRUE) %>%
-                       group_by(SNP) %>% filter(n() > 1) %>%
-                       apply_treatment_filter("Sig.CASE")
-
-multi_sig.SE.01   <- subset(ppsig3.FDR01, Sig.SE   == TRUE) %>%
-                       group_by(SNP) %>% filter(n() > 1) %>%
-                       apply_treatment_filter("Sig.SE")
-
-multi_sig.01 <- rbind(multi_sig.CA.01, multi_sig.CASE.01, multi_sig.SE.01)
-write.table(multi_sig.01, "Sig.Loci.FDR01.2", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(ppsig3.FDR01,    "Sig.Loci.FDR01.1",       sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(ppsig.B10.01,    "Sig.Loci.FDR01.Block10",  sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(ppsig.B11.01,    "Sig.Loci.FDR01.Block11",  sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(ppsig.B12.01,    "Sig.Loci.FDR01.Block12",  sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TIER D: q < 0.01 AND top 1% quantile within each block
+# TIER D: q < 0.01 AND top 1% of the genome-wide q-value distribution
 # ══════════════════════════════════════════════════════════════════════════════
+# top1pct_filter(full_pv) computes the 1st-percentile threshold from the full
+# unfiltered block data, not the pre-filtered significant set (Old Way bug fixed).
+
 ppsig.B10 <- Significat_subset(B10.pv, alpha,     alpha2) %>% top1pct_filter()
 ppsig.B11 <- Significat_subset(B11.pv, B11.alpha, alpha2) %>% top1pct_filter()
 ppsig.B12 <- Significat_subset(B12.pv, alpha,     alpha2) %>% top1pct_filter()
@@ -1126,17 +1124,46 @@ ppsig.B12$BLOCK <- 12
 
 singleton <- read.table("singleton.loci", header = TRUE)
 
-# All Tier D loci (top 1% + q<0.01 across all three blocks)
 tierD_all <- rbind(ppsig.B10, ppsig.B11, ppsig.B12)
-
-# Singleton: Tier D loci that match the singleton list, CON-filtered
-ppsig1.s <- semi_join(tierD_all, singleton, by = "SNP")
+ppsig1.s  <- semi_join(tierD_all, singleton, by = "SNP")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FINAL UNION (unchanged): all tiers combined, CON loci removed
+# CROSS-DATASET TIER: per-block q < 0.01 AND AB q < 0.0001 (multiple.sig.o)
+# ══════════════════════════════════════════════════════════════════════════════
+ppsig1.ab       <- Significat_subset(AB.pv, 0.0001, alpha2)
+ppsig1.ab$BLOCK <- 33
+
+multiple.sig.SE <- bind_rows(subset(ppsig3.FDR01, Sig.SE   == TRUE),
+                              subset(ppsig1.ab,    Sig.SE   == TRUE)) %>%
+                   group_by(SNP) %>% filter(n() > 1) %>%
+                   apply_treatment_filter("Sig.SE")
+
+multiple.sig.CASE <- bind_rows(subset(ppsig3.FDR01, Sig.CASE == TRUE),
+                                subset(ppsig1.ab,    Sig.CASE == TRUE)) %>%
+                     group_by(SNP) %>% filter(n() > 1) %>%
+                     apply_treatment_filter("Sig.CASE")
+
+multiple.sig.CA <- bind_rows(subset(ppsig3.FDR01, Sig.CA   == TRUE),
+                              subset(ppsig1.ab,    Sig.CA   == TRUE)) %>%
+                   group_by(SNP) %>% filter(n() > 1) %>%
+                   apply_treatment_filter("Sig.CA")
+
+multiple.sig.o <- bind_rows(multiple.sig.SE, multiple.sig.CASE, multiple.sig.CA)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CON FILTER
+# ══════════════════════════════════════════════════════════════════════════════
+conpp1   <- subset(pp1,   QCON < 0.01)
+conpp.AB <- subset(AB.pv, QCON < 0.001)
+all_con  <- bind_rows(conpp1, conpp.AB) %>% group_by(SNP) %>% filter(n() > 1)
+all_con  <- subset(all_con, QCON / QCASE < 10 & QCON / QCA < 10 & QCON / QSE < 10)
+write.table(all_con, "ALL.CON.SNPS", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FINAL UNION
 # ══════════════════════════════════════════════════════════════════════════════
 total.sig <- anti_join(
-  bind_rows(multiple.sig.o, all_sig, multi_sig, multi_sig.01, ppsig1.s),
+  bind_rows(multiple.sig.o, all_sig, multi_sig, ppsig1.s),
   all_con,
   by = "SNP"
 )
@@ -1146,9 +1173,9 @@ write.table(total.sig, "Total.Significant.uf.Loci", sep = "\t", row.names = FALS
 # THREE-WAY SPLIT of significant loci
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Core: Tiers A–B–C + cross-dataset overlap, no Tier D contribution, CON-filtered
+# Core: Tiers A–B + cross-dataset overlap, no Tier D contribution, CON-filtered
 core.sig <- anti_join(
-  bind_rows(multiple.sig.o, all_sig, multi_sig, multi_sig.01),
+  bind_rows(multiple.sig.o, all_sig, multi_sig),
   all_con,
   by = "SNP"
 )
