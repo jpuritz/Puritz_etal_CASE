@@ -1424,6 +1424,117 @@ write.table(totalsig.CASE, "sig.case", sep="\t", row.names = FALSE, quote = FALS
 cat <(echo -e "SNP\tGroup") <(mawk '{if (NR > 1) print $1"\tSE"}' sig.se ) <(mawk '{if (NR > 1) print $1"\tCA"}' sig.ca ) <(mawk '{if (NR > 1) print $1"\tBoth"}' sig.both ) > sig.table
 ```
 
+### Tier-specific CON filtering and treatment splits
+```{bash}
+source activate CASE
+
+# ─── bedtools CON-filtering for each locus tier ──────────────────────────────
+# con.loci.filter.bed (built above from ALL.CON.SNPS x gene model) is
+# reference-derived and applies equally to all tiers. core.sig, block.sig,
+# and singleton.sig were already R-level filtered with anti_join(... , all_con);
+# this step removes any remaining loci overlapping CON-associated gene regions.
+
+# Core (Tiers A-C + cross-dataset overlap)
+cut -f2,3 Sig.Loci.Core | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Core.loci.bed
+cat <(echo -e "SNP\tCHROM\tBP") \
+  <(bedtools intersect -a Core.loci.bed -b con.loci.filter.bed | \
+    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Core.Loci.txt
+
+# Block-Specific (Tier D, non-singleton; filename quoted due to hyphen)
+cut -f2,3 "Sig.Loci.Block-Specific" | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > BS.loci.bed
+cat <(echo -e "SNP\tCHROM\tBP") \
+  <(bedtools intersect -a BS.loci.bed -b con.loci.filter.bed | \
+    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.BS.Loci.txt
+
+# Singleton (Tier D, present in only one block)
+cut -f2,3 Sig.Loci.Singleton | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Sing.loci.bed
+cat <(echo -e "SNP\tCHROM\tBP") \
+  <(bedtools intersect -a Sing.loci.bed -b con.loci.filter.bed | \
+    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Sing.Loci.txt
+```
+
+```{r}
+# ─── Secondary CON filter (bedtools-derived) for each tier ───────────────────
+# Applies the gene-region-based CON filter (bedtools intersect result) on top
+# of the R-level anti_join filter already applied during locus definition.
+
+# Core
+con_filter.core <- read.table("ToFilter.Con.Core.Loci.txt", header = TRUE)
+core.sig <- unique(anti_join(core.sig, con_filter.core, by = "SNP"))
+write.table(core.sig, "Core.Significant.Loci",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+grouped_core.sig <- group_and_average(core.sig)
+write.table(grouped_core.sig, "Core.Significant.Grouped.Loci",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Block-Specific
+con_filter.bs <- read.table("ToFilter.Con.BS.Loci.txt", header = TRUE)
+block.sig <- unique(anti_join(block.sig, con_filter.bs, by = "SNP"))
+write.table(block.sig, "BS.Significant.Loci",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+grouped_block.sig <- group_and_average(block.sig)
+write.table(grouped_block.sig, "BS.Significant.Grouped.Loci",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Singleton
+con_filter.sing <- read.table("ToFilter.Con.Sing.Loci.txt", header = TRUE)
+singleton.sig <- unique(anti_join(singleton.sig, con_filter.sing, by = "SNP"))
+write.table(singleton.sig, "Sing.Significant.Loci",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+grouped_singleton.sig <- group_and_average(singleton.sig)
+write.table(grouped_singleton.sig, "Sing.Significant.Grouped.Loci",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+
+# ─── Per-treatment splits for each tier ──────────────────────────────────────
+# Mirrors the total.sig treatment splits above.
+# Sig.CA, Sig.SE, Sig.CASE are logical columns; "both" = loci sig in both CA and SE.
+# Empty subsets are expected for sparse tiers (BS, Singleton) in some categories.
+
+# Core
+coresig.CA   <- subset(core.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
+coresig.SE   <- subset(core.sig, Sig.CA == FALSE & Sig.SE == TRUE)
+coresig.both <- subset(core.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
+coresig.CASE <- subset(core.sig, Sig.CASE == TRUE)
+write.table(coresig.CA,   "sig.core.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(coresig.SE,   "sig.core.se",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(coresig.both, "sig.core.both", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(coresig.CASE, "sig.core.case", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Block-Specific
+bssig.CA   <- subset(block.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
+bssig.SE   <- subset(block.sig, Sig.CA == FALSE & Sig.SE == TRUE)
+bssig.both <- subset(block.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
+bssig.CASE <- subset(block.sig, Sig.CASE == TRUE)
+write.table(bssig.CA,   "sig.bs.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(bssig.SE,   "sig.bs.se",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(bssig.both, "sig.bs.both", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(bssig.CASE, "sig.bs.case", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Singleton
+singsig.CA   <- subset(singleton.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
+singsig.SE   <- subset(singleton.sig, Sig.CA == FALSE & Sig.SE == TRUE)
+singsig.both <- subset(singleton.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
+singsig.CASE <- subset(singleton.sig, Sig.CASE == TRUE)
+write.table(singsig.CA,   "sig.sing.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(singsig.SE,   "sig.sing.se",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(singsig.both, "sig.sing.both", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(singsig.CASE, "sig.sing.case", sep = "\t", row.names = FALSE, quote = FALSE)
+```
+
+```{bash}
+# ─── Per-tier sig.table files (mirrors sig.table for total) ──────────────────
+for TIER in Core BS Sing; do
+  TIER_LC="${TIER,,}"
+  cat <(echo -e "SNP\tGroup") \
+    <(mawk '{if (NR > 1) print $1"\tSE"}'   sig.${TIER_LC}.se  ) \
+    <(mawk '{if (NR > 1) print $1"\tCA"}'   sig.${TIER_LC}.ca  ) \
+    <(mawk '{if (NR > 1) print $1"\tBoth"}' sig.${TIER_LC}.both) > sig.${TIER_LC}.table
+done
+```
+
 
 ```{bash}
 source activate CASE
@@ -1505,7 +1616,163 @@ bedtools intersect -wb -a SE.Significant.B12.loci.bed -b ~/CASE/analysis/sorted.
 
 mawk '$13 == "TRUE" ' Sig.Loci.FDR01.Block12 | sort -k1,2  |  mawk '{print $2 "\t" $3-1 "\t" $3}' | uniq  > CASE.Significant.B12.loci.bed
 bedtools intersect -wb -a CASE.Significant.B12.loci.bed -b ~/CASE/analysis/sorted.ref3.0.gene.bed | grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.B12.CASE.LOC
-``` 
+```
+
+### Tier-specific gene annotation
+```{r}
+# ─── Column index verification ────────────────────────────────────────────────
+# The bash chunks below use fixed column indices. This block verifies those
+# indices against the actual file headers before any gene annotation runs.
+# stop() halts the pipeline with a diagnostic message on mismatch (e.g., if
+# group_and_average column order changes upstream).
+#
+# Expected schema for *.Significant.Loci (same as Total.Significant.Loci):
+#   col 13 = Sig.CASE, col 14 = Sig.CA, col 15 = Sig.SE
+# Expected schema for *.Significant.Grouped.Loci (group_and_average output):
+#   col 11 = Sig.CASE, col 12 = Sig.CA, col 13 = Sig.SE, col 14 = CHROM, col 15 = BP
+
+verify_col_indices <- function(filepath, expected) {
+  hdr <- colnames(read.table(filepath, header = TRUE, nrows = 1, sep = "\t"))
+  for (nm in names(expected)) {
+    idx <- expected[[nm]]
+    actual <- if (length(hdr) >= idx) hdr[idx] else "<missing>"
+    if (actual != nm) {
+      stop(sprintf(
+        "Column index mismatch in '%s': expected col %d = '%s', found '%s'.\nFull header: %s",
+        filepath, idx, nm, actual,
+        paste(sprintf("[%d]%s", seq_along(hdr), hdr), collapse = " ")
+      ))
+    }
+  }
+  invisible(TRUE)
+}
+
+loci_expected    <- list(Sig.CASE = 13L, Sig.CA = 14L, Sig.SE = 15L)
+grouped_expected <- list(Sig.CASE = 11L, Sig.CA = 12L, Sig.SE = 13L, CHROM = 14L, BP = 15L)
+
+# Baseline check on total files to confirm column schema before checking tiers
+verify_col_indices("Total.Significant.Loci",         loci_expected)
+verify_col_indices("Total.Significant.Grouped.Loci", grouped_expected)
+message("Total: column indices verified")
+
+for (tier in c("Core", "BS", "Sing")) {
+  verify_col_indices(paste0(tier, ".Significant.Loci"),         loci_expected)
+  verify_col_indices(paste0(tier, ".Significant.Grouped.Loci"), grouped_expected)
+  message(tier, ": column indices verified")
+}
+message("All column index checks passed. Proceeding to gene annotation.")
+```
+
+```{bash}
+source activate CASE
+
+GENE_BED=~/CASE/analysis/sorted.ref3.0.gene.bed
+
+# ─── Total LOC gene lists per tier ───────────────────────────────────────────
+
+cut -f2,3 Core.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Core.Significant.loci.bed
+bedtools intersect -wb -a Core.Significant.loci.bed -b $GENE_BED | \
+  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.Core.TOTAL.LOC
+
+cut -f2,3 BS.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > BS.Significant.loci.bed
+bedtools intersect -wb -a BS.Significant.loci.bed -b $GENE_BED | \
+  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.BS.TOTAL.LOC
+
+cut -f2,3 Sing.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Sing.Significant.loci.bed
+bedtools intersect -wb -a Sing.Significant.loci.bed -b $GENE_BED | \
+  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.Sing.TOTAL.LOC
+```
+
+```{bash}
+source activate CASE
+
+GENE_BED=~/CASE/analysis/sorted.ref3.0.gene.bed
+
+# ─── Per-treatment LOC lists per tier ────────────────────────────────────────
+# Column indices (verified by the R chunk above):
+#   *.Significant.Loci:         col 13 = Sig.CASE, col 14 = Sig.CA, col 15 = Sig.SE
+#   *.Significant.Grouped.Loci: col 11 = Sig.CASE, col 12 = Sig.CA, col 13 = Sig.SE
+#                               col 14 = CHROM, col 15 = BP
+# Empty output files are expected for sparse tiers in some treatment categories.
+
+for TIER in Core BS Sing; do
+  LOCI="${TIER}.Significant.Loci"
+
+  # CA (col 14)
+  mawk '$14 == "TRUE"' $LOCI | sort -k1,2 | mawk '{print $2 "\t" $3-1 "\t" $3}' | uniq \
+    > CA.${TIER}.loci.bed
+  bedtools intersect -wb -a CA.${TIER}.loci.bed -b $GENE_BED | \
+    grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq \
+    > Sig.loci.${TIER}.CA.LOC
+
+  # SE (col 15)
+  mawk '$15 == "TRUE"' $LOCI | sort -k1,2 | mawk '{print $2 "\t" $3-1 "\t" $3}' | uniq \
+    > SE.${TIER}.loci.bed
+  bedtools intersect -wb -a SE.${TIER}.loci.bed -b $GENE_BED | \
+    grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq \
+    > Sig.loci.${TIER}.SE.LOC
+
+  # CASE (col 13)
+  mawk '$13 == "TRUE"' $LOCI | sort -k1,2 | mawk '{print $2 "\t" $3-1 "\t" $3}' | uniq \
+    > CASE.${TIER}.loci.bed
+  bedtools intersect -wb -a CASE.${TIER}.loci.bed -b $GENE_BED | \
+    grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq \
+    > Sig.loci.${TIER}.CASE.LOC
+done
+```
+
+```{bash}
+source activate CASE
+
+GENE_BED=~/CASE/analysis/sorted.ref3.0.gene.bed
+
+# ─── Pairwise and triple-treatment LOC lists per tier ────────────────────────
+# Grouped.Loci column indices: col 11 = Sig.CASE, col 12 = Sig.CA, col 13 = Sig.SE
+#                              col 14 = CHROM, col 15 = BP
+# Core tier will have the most populated combination sets; BS and Singleton
+# output may be empty in some categories, which is expected and interpretable.
+
+for TIER in Core BS Sing; do
+  GLOCI="${TIER}.Significant.Grouped.Loci"
+
+  # SE+CASE but not CA
+  mawk '$11 == "TRUE" && $13 == "TRUE" && $12 == "FALSE"' $GLOCI | \
+    mawk '{print $14 "\t" $15-1 "\t" $15}' | uniq > SE.CASE.${TIER}.loci.bed
+  bedtools intersect -wb -a SE.CASE.${TIER}.loci.bed -b $GENE_BED | \
+    grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq \
+    > Sig.loci.${TIER}.SE.CASE.LOC
+
+  # SE+CASE+CA
+  mawk '$11 == "TRUE" && $13 == "TRUE" && $12 == "TRUE"' $GLOCI | \
+    mawk '{print $14 "\t" $15-1 "\t" $15}' | uniq > SE.CASE.CA.${TIER}.loci.bed
+  bedtools intersect -wb -a SE.CASE.CA.${TIER}.loci.bed -b $GENE_BED | \
+    grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq \
+    > Sig.loci.${TIER}.SE.CASE.CA.LOC
+
+  # CA factor: CA-only + CA+CASE loci (all loci responding to acidification)
+  mawk '$12 == "TRUE" && $11 == "FALSE" && $13 == "FALSE"' $GLOCI | \
+    mawk '{print $14 "\t" $15-1 "\t" $15}' | uniq > CA.ONLY.${TIER}.loci.bed
+  mawk '$12 == "TRUE" && $11 == "TRUE"  && $13 == "FALSE"' $GLOCI | \
+    mawk '{print $14 "\t" $15-1 "\t" $15}' | uniq > CA.CASE.${TIER}.loci.bed
+  cat CA.ONLY.${TIER}.loci.bed CA.CASE.${TIER}.loci.bed | sort | uniq > CA.factor.${TIER}.loci.bed
+  bedtools intersect -wb -a CA.factor.${TIER}.loci.bed -b $GENE_BED | \
+    grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq \
+    > Sig.loci.${TIER}.CA.factor.LOC
+
+  # SE factor: SE-only + SE+CASE loci (all loci responding to sewage effluent)
+  mawk '$13 == "TRUE" && $11 == "FALSE" && $12 == "FALSE"' $GLOCI | \
+    mawk '{print $14 "\t" $15-1 "\t" $15}' | uniq > SE.ONLY.${TIER}.loci.bed
+  mawk '$13 == "TRUE" && $11 == "TRUE"  && $12 == "FALSE"' $GLOCI | \
+    mawk '{print $14 "\t" $15-1 "\t" $15}' | uniq > SE.CASE.ONLY.${TIER}.loci.bed
+  cat SE.ONLY.${TIER}.loci.bed SE.CASE.ONLY.${TIER}.loci.bed | sort | uniq > SE.factor.${TIER}.loci.bed
+  bedtools intersect -wb -a SE.factor.${TIER}.loci.bed -b $GENE_BED | \
+    grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq \
+    > Sig.loci.${TIER}.SE.factor.LOC
+done
+```
 
 ## GO Analysis
 ```{r}
@@ -1524,7 +1791,71 @@ pp <- publish_gostplot(p, width = NA, height = NA, filename = NULL )
 
 png(filename="TestGO.png", type="cairo",units="px", width=4000, height=2500, res=300, bg="transparent")
 
-pp 
+pp
+dev.off()
+```
+
+### Tier-specific gprofiler2 GO enrichment
+
+```{r}
+# Core loci — multi-block, Tiers A–C locus set
+gostres.core <- gost(
+  query         = list(
+    "CASE" = read.table("Sig.loci.Core.CASE.LOC", header = FALSE),
+    "SE"   = read.table("Sig.loci.Core.SE.LOC",   header = FALSE),
+    "CA"   = read.table("Sig.loci.Core.CA.LOC",   header = FALSE)
+  ),
+  organism       = "cvgca002022765v4",
+  multi_query    = FALSE,
+  user_threshold = 0.05,
+  domain_scope   = "known"
+)
+p.core   <- gostplot(gostres.core, capped = TRUE, interactive = FALSE)
+p.core   <- p.core + theme_black() + theme(legend.position = "none")
+pp.core  <- publish_gostplot(p.core, width = NA, height = NA, filename = NULL)
+png(filename = "TestGO.Core.png", type = "cairo", units = "px",
+    width = 4000, height = 2500, res = 300, bg = "transparent")
+pp.core
+dev.off()
+
+# Block-Specific loci — Tier D non-singleton locus set
+gostres.bs <- gost(
+  query         = list(
+    "CASE" = read.table("Sig.loci.BS.CASE.LOC", header = FALSE),
+    "SE"   = read.table("Sig.loci.BS.SE.LOC",   header = FALSE),
+    "CA"   = read.table("Sig.loci.BS.CA.LOC",   header = FALSE)
+  ),
+  organism       = "cvgca002022765v4",
+  multi_query    = FALSE,
+  user_threshold = 0.05,
+  domain_scope   = "known"
+)
+p.bs   <- gostplot(gostres.bs, capped = TRUE, interactive = FALSE)
+p.bs   <- p.bs + theme_black() + theme(legend.position = "none")
+pp.bs  <- publish_gostplot(p.bs, width = NA, height = NA, filename = NULL)
+png(filename = "TestGO.BS.png", type = "cairo", units = "px",
+    width = 4000, height = 2500, res = 300, bg = "transparent")
+pp.bs
+dev.off()
+
+# Singleton loci — Tier D single-block locus set
+gostres.sing <- gost(
+  query         = list(
+    "CASE" = read.table("Sig.loci.Sing.CASE.LOC", header = FALSE),
+    "SE"   = read.table("Sig.loci.Sing.SE.LOC",   header = FALSE),
+    "CA"   = read.table("Sig.loci.Sing.CA.LOC",   header = FALSE)
+  ),
+  organism       = "cvgca002022765v4",
+  multi_query    = FALSE,
+  user_threshold = 0.05,
+  domain_scope   = "known"
+)
+p.sing   <- gostplot(gostres.sing, capped = TRUE, interactive = FALSE)
+p.sing   <- p.sing + theme_black() + theme(legend.position = "none")
+pp.sing  <- publish_gostplot(p.sing, width = NA, height = NA, filename = NULL)
+png(filename = "TestGO.Sing.png", type = "cairo", units = "px",
+    width = 4000, height = 2500, res = 300, bg = "transparent")
+pp.sing
 dev.off()
 ```
 
@@ -1588,6 +1919,53 @@ awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' SE_cand_genes_GO.tab > 
 # CASE (CA+SE combined) stressor loci
 grep -F -f ../Sig.loci.1.CASE.LOC gene2go_full.tab > CASE_cand_genes_GO.tab
 awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' CASE_cand_genes_GO.tab > CASE_cand_genes_GO_head.tab
+```
+
+### Extract GO terms for tier-specific candidate genes
+
+```{bash, eval=FALSE}
+cd ./GO
+
+# --- Core loci (Tiers A–C, multi-block) ---
+grep -F -f ../Sig.loci.Core.TOTAL.LOC  gene2go_full.tab > Core_ALL_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Core_ALL_cand_genes_GO.tab  > Core_ALL_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.Core.CA.LOC     gene2go_full.tab > Core_CA_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Core_CA_cand_genes_GO.tab   > Core_CA_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.Core.SE.LOC     gene2go_full.tab > Core_SE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Core_SE_cand_genes_GO.tab   > Core_SE_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.Core.CASE.LOC   gene2go_full.tab > Core_CASE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Core_CASE_cand_genes_GO.tab > Core_CASE_cand_genes_GO_head.tab
+
+# --- Block-Specific loci (Tier D, non-singleton) ---
+grep -F -f ../Sig.loci.BS.TOTAL.LOC    gene2go_full.tab > BS_ALL_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_ALL_cand_genes_GO.tab    > BS_ALL_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.BS.CA.LOC       gene2go_full.tab > BS_CA_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_CA_cand_genes_GO.tab     > BS_CA_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.BS.SE.LOC       gene2go_full.tab > BS_SE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_SE_cand_genes_GO.tab     > BS_SE_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.BS.CASE.LOC     gene2go_full.tab > BS_CASE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_CASE_cand_genes_GO.tab   > BS_CASE_cand_genes_GO_head.tab
+
+# --- Singleton loci (Tier D, single-block only) ---
+# Note: these files may be empty if singleton loci map to no annotated genes;
+# downstream R code handles empty input gracefully via run_topGO_analysis().
+grep -F -f ../Sig.loci.Sing.TOTAL.LOC  gene2go_full.tab > Sing_ALL_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Sing_ALL_cand_genes_GO.tab  > Sing_ALL_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.Sing.CA.LOC     gene2go_full.tab > Sing_CA_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Sing_CA_cand_genes_GO.tab   > Sing_CA_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.Sing.SE.LOC     gene2go_full.tab > Sing_SE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Sing_SE_cand_genes_GO.tab   > Sing_SE_cand_genes_GO_head.tab
+
+grep -F -f ../Sig.loci.Sing.CASE.LOC   gene2go_full.tab > Sing_CASE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Sing_CASE_cand_genes_GO.tab > Sing_CASE_cand_genes_GO_head.tab
 ```
 
 ### Load libraries and gene-to-GO data
@@ -1711,6 +2089,36 @@ GO_SE <- run_topGO_analysis("GO/SE_cand_genes_GO_head.tab", all_genes, gene2go_t
 GO_CASE <- run_topGO_analysis("GO/CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "CASE")
 ```
 
+### Run GO enrichment for Core loci
+
+```{r}
+# Core loci: multi-block, Tiers A–C; highest-confidence locus set
+GO_Core_ALL  <- run_topGO_analysis("GO/Core_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Core: All Outliers")
+GO_Core_CA   <- run_topGO_analysis("GO/Core_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Core: CA")
+GO_Core_SE   <- run_topGO_analysis("GO/Core_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Core: SE")
+GO_Core_CASE <- run_topGO_analysis("GO/Core_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Core: CASE")
+```
+
+### Run GO enrichment for Block-Specific loci
+
+```{r}
+# Block-Specific loci: Tier D non-singleton; significant in exactly one block
+GO_BS_ALL  <- run_topGO_analysis("GO/BS_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Block-Specific: All Outliers")
+GO_BS_CA   <- run_topGO_analysis("GO/BS_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Block-Specific: CA")
+GO_BS_SE   <- run_topGO_analysis("GO/BS_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Block-Specific: SE")
+GO_BS_CASE <- run_topGO_analysis("GO/BS_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Block-Specific: CASE")
+```
+
+### Run GO enrichment for Singleton loci
+
+```{r}
+# Singleton loci: Tier D single-block; may return NULL if too few annotated genes
+GO_Sing_ALL  <- run_topGO_analysis("GO/Sing_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Singleton: All Outliers")
+GO_Sing_CA   <- run_topGO_analysis("GO/Sing_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Singleton: CA")
+GO_Sing_SE   <- run_topGO_analysis("GO/Sing_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Singleton: SE")
+GO_Sing_CASE <- run_topGO_analysis("GO/Sing_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Singleton: CASE")
+```
+
 ### Save results
 
 ```{r}
@@ -1718,6 +2126,28 @@ if(!is.null(GO_ALL))  write.csv(GO_ALL,  "GO/ALL_GO_en_sig_gene.csv", row.names 
 if(!is.null(GO_CA))   write.csv(GO_CA,   "GO/CA_GO_en_sig_gene.csv", row.names = FALSE)
 if(!is.null(GO_SE))   write.csv(GO_SE,   "GO/SE_GO_en_sig_gene.csv", row.names = FALSE)
 if(!is.null(GO_CASE)) write.csv(GO_CASE, "GO/CASE_GO_en_sig_gene.csv", row.names = FALSE)
+```
+
+### Save tier-specific topGO results
+
+```{r}
+# Core
+if(!is.null(GO_Core_ALL))  write.csv(GO_Core_ALL,  "GO/Core_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
+if(!is.null(GO_Core_CA))   write.csv(GO_Core_CA,   "GO/Core_CA_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Core_SE))   write.csv(GO_Core_SE,   "GO/Core_SE_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Core_CASE)) write.csv(GO_Core_CASE, "GO/Core_CASE_GO_en_sig_gene.csv", row.names = FALSE)
+
+# Block-Specific
+if(!is.null(GO_BS_ALL))  write.csv(GO_BS_ALL,  "GO/BS_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
+if(!is.null(GO_BS_CA))   write.csv(GO_BS_CA,   "GO/BS_CA_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_BS_SE))   write.csv(GO_BS_SE,   "GO/BS_SE_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_BS_CASE)) write.csv(GO_BS_CASE, "GO/BS_CASE_GO_en_sig_gene.csv", row.names = FALSE)
+
+# Singleton
+if(!is.null(GO_Sing_ALL))  write.csv(GO_Sing_ALL,  "GO/Sing_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
+if(!is.null(GO_Sing_CA))   write.csv(GO_Sing_CA,   "GO/Sing_CA_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Sing_SE))   write.csv(GO_Sing_SE,   "GO/Sing_SE_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Sing_CASE)) write.csv(GO_Sing_CASE, "GO/Sing_CASE_GO_en_sig_gene.csv", row.names = FALSE)
 ```
 
 ### Plot GO enrichment for each stressor category
@@ -1781,6 +2211,58 @@ save_GO_plot(GO_SE_plot,   "GO/GO_enrichment_SE.png")
 save_GO_plot(GO_CASE_plot, "GO/GO_enrichment_CASE.png")
 ```
 
+### Plot and save tier-specific GO enrichment
+
+```{r, fig.width=14, fig.height=10}
+# --- Core loci ---
+GO_Core_ALL_plot  <- plot_GO(GO_Core_ALL,  "Core: All Outlier Loci")
+GO_Core_CA_plot   <- plot_GO(GO_Core_CA,   "Core: CA Stressor")
+GO_Core_SE_plot   <- plot_GO(GO_Core_SE,   "Core: SE Stressor")
+GO_Core_CASE_plot <- plot_GO(GO_Core_CASE, "Core: CASE Stressor (CA+SE)")
+
+if(!is.null(GO_Core_ALL_plot))  print(GO_Core_ALL_plot)
+if(!is.null(GO_Core_CA_plot))   print(GO_Core_CA_plot)
+if(!is.null(GO_Core_SE_plot))   print(GO_Core_SE_plot)
+if(!is.null(GO_Core_CASE_plot)) print(GO_Core_CASE_plot)
+
+save_GO_plot(GO_Core_ALL_plot,  "GO/GO_enrichment_Core_ALL.png")
+save_GO_plot(GO_Core_CA_plot,   "GO/GO_enrichment_Core_CA.png")
+save_GO_plot(GO_Core_SE_plot,   "GO/GO_enrichment_Core_SE.png")
+save_GO_plot(GO_Core_CASE_plot, "GO/GO_enrichment_Core_CASE.png")
+
+# --- Block-Specific loci ---
+GO_BS_ALL_plot  <- plot_GO(GO_BS_ALL,  "Block-Specific: All Outlier Loci")
+GO_BS_CA_plot   <- plot_GO(GO_BS_CA,   "Block-Specific: CA Stressor")
+GO_BS_SE_plot   <- plot_GO(GO_BS_SE,   "Block-Specific: SE Stressor")
+GO_BS_CASE_plot <- plot_GO(GO_BS_CASE, "Block-Specific: CASE Stressor (CA+SE)")
+
+if(!is.null(GO_BS_ALL_plot))  print(GO_BS_ALL_plot)
+if(!is.null(GO_BS_CA_plot))   print(GO_BS_CA_plot)
+if(!is.null(GO_BS_SE_plot))   print(GO_BS_SE_plot)
+if(!is.null(GO_BS_CASE_plot)) print(GO_BS_CASE_plot)
+
+save_GO_plot(GO_BS_ALL_plot,  "GO/GO_enrichment_BS_ALL.png")
+save_GO_plot(GO_BS_CA_plot,   "GO/GO_enrichment_BS_CA.png")
+save_GO_plot(GO_BS_SE_plot,   "GO/GO_enrichment_BS_SE.png")
+save_GO_plot(GO_BS_CASE_plot, "GO/GO_enrichment_BS_CASE.png")
+
+# --- Singleton loci ---
+GO_Sing_ALL_plot  <- plot_GO(GO_Sing_ALL,  "Singleton: All Outlier Loci")
+GO_Sing_CA_plot   <- plot_GO(GO_Sing_CA,   "Singleton: CA Stressor")
+GO_Sing_SE_plot   <- plot_GO(GO_Sing_SE,   "Singleton: SE Stressor")
+GO_Sing_CASE_plot <- plot_GO(GO_Sing_CASE, "Singleton: CASE Stressor (CA+SE)")
+
+if(!is.null(GO_Sing_ALL_plot))  print(GO_Sing_ALL_plot)
+if(!is.null(GO_Sing_CA_plot))   print(GO_Sing_CA_plot)
+if(!is.null(GO_Sing_SE_plot))   print(GO_Sing_SE_plot)
+if(!is.null(GO_Sing_CASE_plot)) print(GO_Sing_CASE_plot)
+
+save_GO_plot(GO_Sing_ALL_plot,  "GO/GO_enrichment_Sing_ALL.png")
+save_GO_plot(GO_Sing_CA_plot,   "GO/GO_enrichment_Sing_CA.png")
+save_GO_plot(GO_Sing_SE_plot,   "GO/GO_enrichment_Sing_SE.png")
+save_GO_plot(GO_Sing_CASE_plot, "GO/GO_enrichment_Sing_CASE.png")
+```
+
 ### Combined GO enrichment plot (all stressors)
 
 ```{r, fig.width=16, fig.height=14}
@@ -1821,6 +2303,39 @@ if(nrow(GO_combined) > 0) {
 
 
 # Manhattan Plots
+
+## Tier highlight helpers
+
+```{r}
+# Color palette for the three locus tiers (colorblind-friendly)
+tier_colors <- c(
+  "Core"           = "#E69F00",   # amber  — high-confidence, multi-block
+  "Block-Specific" = "#009E73",   # teal   — significant in exactly one block
+  "Singleton"      = "#0072B2"    # blue   — single-locus singleton hits
+)
+
+# build_tier_highlights(): given the ggman data frame (dfm) for one block and
+# one treatment column, returns a data frame with a Tier column for the
+# three locus tiers. Used to color-code outlier points in Manhattan plots.
+#
+# Arguments:
+#   dfm           — ggman plot data frame (output of ggman()[[1]])
+#   block_num     — integer block ID (10, 11, or 12)
+#   treatment_col — string name of the significance column (e.g. "Sig.CASE")
+build_tier_highlights <- function(dfm, block_num, treatment_col) {
+  h.core <- core.sig      %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
+  h.bs   <- block.sig     %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
+  h.sing <- singleton.sig %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
+
+  bind_rows(
+    semi_join(dfm, h.core, by = "SNP") %>% mutate(Tier = "Core"),
+    semi_join(dfm, h.bs,   by = "SNP") %>% mutate(Tier = "Block-Specific"),
+    semi_join(dfm, h.sing, by = "SNP") %>% mutate(Tier = "Singleton")
+  ) %>%
+    mutate(Tier = factor(Tier, levels = c("Core", "Block-Specific", "Singleton")))
+}
+```
+
 #### CASE
 ```{r, warning =FALSE, eval = FALSE}
 b10.h <- subset(total.sig,  BLOCK == "10" & Sig.CASE == TRUE)
@@ -1844,8 +2359,8 @@ dfm <- man[[1]]
 
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
-dfmo <- semi_join(dfm, b10.h, by = "SNP")
-dfmo$Group <- "Outlier"
+# Highlight each block using tier-colored points (Core/Block-Specific/Singleton)
+dfmo <- build_tier_highlights(dfm, block_num = 10, treatment_col = "Sig.CASE")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -1854,10 +2369,11 @@ xbreaks <- sapply(dfmsplit,function(x) {
     return(x$index[midpoint])
 })
 b10.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[4], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[4])+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size = FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_size_continuous(range = c(0.25,3)) +
   scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,50))+
@@ -1865,8 +2381,8 @@ b10.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   labs(x = "Chromosome") +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE)+
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none")+
   guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 b11.h <- subset(total.sig,  BLOCK == "11" & Sig.CASE == TRUE)
@@ -1890,8 +2406,7 @@ dfm <- man[[1]]
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
 
-dfmo <- semi_join(dfm, b11.h, by = "SNP")
-dfmo$Group <- "Outlier"
+dfmo <- build_tier_highlights(dfm, block_num = 11, treatment_col = "Sig.CASE")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -1901,11 +2416,11 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b11.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
-  #geom_point(aes(x=index, y=log10(QCON), colour = as.factor(chrom_alt), alpha=0.5, shape = Group))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[4], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[4])+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_size_continuous(range = c(0.25,3)) +
   scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,8))+
@@ -1913,8 +2428,8 @@ b11.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   ggtitle("Block 11") +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) +    
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none") +
   guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 
@@ -1938,8 +2453,7 @@ dfm <- man[[1]]
 
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
-dfmo <- semi_join(dfm, b12.h, by = "SNP")
-dfmo$Group <- "Outlier"
+dfmo <- build_tier_highlights(dfm, block_num = 12, treatment_col = "Sig.CASE")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -1949,10 +2463,11 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b12.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[4], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[4])+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
   labs(x = "Chromosome") +
@@ -1961,8 +2476,8 @@ b12.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   scale_size_continuous(range = c(0.25,3), limits=c(0,20)) +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) + 
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none") +
   guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 ```
 ```{r}
@@ -2072,8 +2587,7 @@ dfm <- man[[1]]
 
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
-dfmo <- semi_join(dfm, b10.h, by = "SNP")
-dfmo$Group <- "Outlier"
+dfmo <- build_tier_highlights(dfm, block_num = 10, treatment_col = "Sig.SE")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -2083,10 +2597,11 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b10.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[3], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[3])+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   ggtitle("Block 10") +
   labs(x = "Chromosome") +
@@ -2094,8 +2609,8 @@ b10.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,50))+
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) + 
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none") +
   guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 b11.h <- subset(total.sig,  BLOCK == "11" & Sig.SE == TRUE)
@@ -2119,8 +2634,7 @@ dfm <- man[[1]]
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
 
-dfmo <- semi_join(dfm, b11.h, by = "SNP")
-dfmo$Group <- "Outlier"
+dfmo <- build_tier_highlights(dfm, block_num = 11, treatment_col = "Sig.SE")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -2130,19 +2644,19 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b11.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
-  #geom_point(aes(x=index, y=log10(QCON), colour = as.factor(chrom_alt), alpha=0.5, shape = Group))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[3], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[3])+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   labs(x = "Chromosome") +
   ggtitle("Block 11") +
   theme_classic()+
   scale_size_continuous(range = c(0.25,3)) +
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) + 
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none") +
   guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 
@@ -2166,8 +2680,7 @@ dfm <- man[[1]]
 
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
-dfmo <- semi_join(dfm, b12.h, by = "SNP")
-dfmo$Group <- "Outlier"
+dfmo <- build_tier_highlights(dfm, block_num = 12, treatment_col = "Sig.SE")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -2177,10 +2690,11 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b12.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[3], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[3])+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,15))+ #Removes two singleton loci at end of CHR 5
   labs(x = "Chromosome") +
@@ -2188,8 +2702,8 @@ b12.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   ggtitle("Block 12") +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) +
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none") +
   guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 ```
@@ -2303,8 +2817,7 @@ dfm <- man[[1]]
 
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
-dfmo <- semi_join(dfm, b10.h, by = "SNP")
-dfmo$Group <- "Outlier"
+dfmo <- build_tier_highlights(dfm, block_num = 10, treatment_col = "Sig.CA")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -2314,10 +2827,11 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b10.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[2], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[2])+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,32))+ #Limit manually set, removes 3 control filtered loci in CHR 2
   ggtitle("Block 10") +
@@ -2325,8 +2839,8 @@ b10.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   scale_size_continuous(range = c(0.25,3), limits=c(0,32)) +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) +
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none") +
   guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 b11.h <- subset(total.sig,  BLOCK == "11" & Sig.CA == TRUE)
@@ -2350,8 +2864,7 @@ dfm <- man[[1]]
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
 
-dfmo <- semi_join(dfm, b11.h, by = "SNP")
-dfmo$Group <- "Outlier"
+dfmo <- build_tier_highlights(dfm, block_num = 11, treatment_col = "Sig.CA")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -2362,18 +2875,18 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b11.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  #geom_point(aes(x=index, y=log10(QCON), colour = as.factor(chrom_alt), alpha=0.5, shape = Group))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[2], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[2])+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   labs(x = "Chromosome") +
   ggtitle("Block 11") +
   scale_size_continuous(range = c(0.25,3)) +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) + 
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none") +
   guides(shape = guide_legend(override.aes = list(color = "grey", size = 5, linetype =0) ) )
 
 
@@ -2397,8 +2910,7 @@ dfm <- man[[1]]
 
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
-dfmo <- semi_join(dfm, b12.h, by = "SNP")
-dfmo$Group <- "Outlier"
+dfmo <- build_tier_highlights(dfm, block_num = 12, treatment_col = "Sig.CA")
 
 dfmsplit <- split(dfm, dfm$chrom)
 xbreaks <- sapply(dfmsplit,function(x) {
@@ -2408,10 +2920,11 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 
 b12.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker))+ 
-  geom_point(data=dfmo, fill=cbPaletteSmall4[2], aes(x=index, y=marker, shape=Group, size=marker),  color = cbPaletteSmall4[2])+
+  geom_point(aes(alpha=marker, shape=Group, size = marker))+
+  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  scale_fill_manual(values=tier_colors, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
+  guides(colour="none", alpha="none", size="none") +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #removes two singleton loci near end of CHR 5
   labs(x = "Chromosome") +
@@ -2419,8 +2932,8 @@ b12.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   ggtitle("Block 12") +
   theme_classic()+
   labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
+  scale_shape_manual(values=c(15,21,16))+
+  scale_color_manual(values=c("grey", "dark grey"), guide="none")
 ```
 ```{r}
 png(filename="CAmpHighlighted.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
@@ -2818,8 +3331,8 @@ sig.all <- nrow(unique(read.table("Sig.loci.B12.SE.CASE.CA.LOC", header =FALSE))
 
 png(filename="VenB12LOC.png", type="cairo",units="px", width=3000, height=3000, res=200, bg="transparent")
 venn.plot <- draw.triple.venn(
-  area1=sig.CA, area2=sig.SE, area3=sig.CASE, 
-  n12= sig.CA.SE, n13=sig.CA.CASE, 
+  area1=sig.CA, area2=sig.SE, area3=sig.CASE,
+  n12= sig.CA.SE, n13=sig.CA.CASE,
   n23=sig.SE.CASE,
   n123=sig.all, cex=5,
   category = c("CA", "SE", "CASE"),
@@ -2828,6 +3341,58 @@ venn.plot <- draw.triple.venn(
 dev.off()
 
 ```
+
+### Tier-based Venn Diagrams
+
+Helper to compute the six areas needed for `draw.triple.venn()` from a
+grouped loci data frame (output of `group_and_average()`).
+
+```{r}
+# draw_tier_venn(): compute overlaps and render a CA/SE/CASE triple Venn
+# for a given grouped-loci data frame.
+#
+# Arguments:
+#   gdf       — grouped loci data frame (must have Sig.CA, Sig.SE, Sig.CASE columns)
+#   png_file  — output PNG path
+#   title     — printed to console for traceability
+draw_tier_venn <- function(gdf, png_file, title = "") {
+  cat(paste0("\n-- Venn: ", title, " --\n"))
+
+  n_CA   <- nrow(unique(subset(gdf, Sig.CA   == TRUE, c(SNP))))
+  n_SE   <- nrow(unique(subset(gdf, Sig.SE   == TRUE, c(SNP))))
+  n_CASE <- nrow(unique(subset(gdf, Sig.CASE == TRUE, c(SNP))))
+
+  n_CA_SE   <- nrow(unique(subset(gdf, Sig.CA == TRUE & Sig.SE   == TRUE, c(SNP))))
+  n_CA_CASE <- nrow(unique(subset(gdf, Sig.CA == TRUE & Sig.CASE == TRUE, c(SNP))))
+  n_SE_CASE <- nrow(unique(subset(gdf, Sig.SE == TRUE & Sig.CASE == TRUE, c(SNP))))
+  n_all     <- nrow(unique(subset(gdf, Sig.CA == TRUE & Sig.SE   == TRUE & Sig.CASE == TRUE, c(SNP))))
+
+  cat(sprintf("  CA=%d  SE=%d  CASE=%d  CA∩SE=%d  CA∩CASE=%d  SE∩CASE=%d  all=%d\n",
+              n_CA, n_SE, n_CASE, n_CA_SE, n_CA_CASE, n_SE_CASE, n_all))
+
+  png(filename = png_file, type = "cairo", units = "px",
+      width = 3000, height = 3000, res = 200, bg = "transparent")
+  vp <- draw.triple.venn(
+    area1 = n_CA, area2 = n_SE, area3 = n_CASE,
+    n12   = n_CA_SE, n13 = n_CA_CASE, n23 = n_SE_CASE, n123 = n_all,
+    cex = 5, category = c("CA", "SE", "CASE"),
+    fill = cbPaletteSmall3, cat.cex = rep(5, 3),
+    cat.col = cbPaletteSmall3, label.col = rep("white", 7))
+  dev.off()
+  invisible(vp)
+}
+
+# --- Core loci (Tiers A–C, multi-block) ---
+draw_tier_venn(grouped_core.sig, "VenCore.png",   "Core")
+
+# --- Block-Specific loci (Tier D, non-singleton) ---
+draw_tier_venn(grouped_block.sig, "VenBS.png",    "Block-Specific")
+
+# --- Singleton loci (Tier D, single-block) ---
+# May produce zero-area circles for some stressors if no singletons pass that filter
+draw_tier_venn(grouped_singleton.sig, "VenSing.png", "Singleton")
+```
+
 # PCA
 ```{bash, eval = FALSE}
 source activate CASE
@@ -3185,6 +3750,227 @@ lapply(plots_by_spawn, print)
 
 ```
 
+## Tier-specific PCA
 
+### Extract tier-specific sync files
 
+```{bash, eval=FALSE}
+source activate CASE
+
+# Build per-tier position filters from the Significant.Loci files created in the
+# CON-filtering section. Each filter is a CHR/BP table used to subset the
+# full sync file.
+
+# --- Core loci ---
+mawk '!/CHR/' Core.Significant.Loci | cut -f2,3 | sort | uniq > Core.pca.filter
+# All-blocks sync (cov-filtered, columns 1–56 only)
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Core.pca.filter CASE.All.Blocks.cov.sync \
+  | cut --complement -f60- > Core.outlier.pca.sync
+# Raw sync (for per-block PCA loop below)
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Core.pca.filter CASE.All.Blocks.sync \
+  | cut --complement -f60- > Core.outlier.pca.block.sync
+
+# --- Block-Specific loci ---
+mawk '!/CHR/' BS.Significant.Loci | cut -f2,3 | sort | uniq > BS.pca.filter
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' BS.pca.filter CASE.All.Blocks.cov.sync \
+  | cut --complement -f60- > BS.outlier.pca.sync
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' BS.pca.filter CASE.All.Blocks.sync \
+  | cut --complement -f60- > BS.outlier.pca.block.sync
+
+# --- Singleton loci ---
+mawk '!/CHR/' Sing.Significant.Loci | cut -f2,3 | sort | uniq > Sing.pca.filter
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Sing.pca.filter CASE.All.Blocks.cov.sync \
+  | cut --complement -f60- > Sing.outlier.pca.sync
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Sing.pca.filter CASE.All.Blocks.sync \
+  | cut --complement -f60- > Sing.outlier.pca.block.sync
+```
+
+### All-samples PCA helper function
+
+```{r}
+# run_tier_pca(): reads a sync file for one locus tier, computes allele
+# frequencies, runs PCA (all 56 samples), and saves two PNGs — one colored
+# by Treatment, one by Spawn (block).
+#
+# Arguments:
+#   sync_file   — path to the tier-filtered .sync file (cov-filtered, 56 cols)
+#   tier_label  — human-readable label used in plot titles
+#   out_prefix  — file-name prefix for PNG output (e.g. "PC_Core")
+#
+# Returns invisibly: list(pca_df, var_explained, p_treat, p_spawn)
+run_tier_pca <- function(sync_file, tier_label, out_prefix) {
+  cat(paste0("\n=== PCA: ", tier_label, " ===\n"))
+
+  # Sample metadata — same order as in all existing PCA blocks
+  treatment.labels <- c(rep("CA", 11), rep("CASE", 11), rep("CON", 11),
+                        rep("IS", 12), rep("SE", 11))
+  spawn.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12",
+                   "B11","B10","B11","B12","B12","B10","B12","B11","B10","B11",
+                   "B11","B12","B10","B11","B12","B11","B10","B12","B10","B11",
+                   "B12","B11","B12","B10","B11","B10","B11","B10","B11","B10",
+                   "B11","B12","B12","B12","B12","B11","B12","B10","B10","B11",
+                   "B11","B10","B12","B12","B11","B12")
+
+  inp    <- read.sync(file = sync_file, gen = seq(1, 56), repl = seq(1, 56),
+                      polarization = "rising")
+  inp.af <- af(inp, gen = seq(1, 56), repl = seq(1, 56))
+  colnames(inp.af) <- paste(treatment.labels, spawn.names, sep = "_")
+
+  af_t    <- t(inp.af)
+  pca_res <- prcomp(af_t, center = TRUE, scale. = TRUE)
+  pca_df  <- as.data.frame(pca_res$x)
+  var_exp <- pca_res$sdev^2 / sum(pca_res$sdev^2) * 100
+
+  pca_df$Population <- spawn.names
+  pca_df$Treatments <- treatment.labels
+
+  cat(sprintf("  Loci: %d   PC1: %.1f%%   PC2: %.1f%%\n",
+              nrow(inp.af), var_exp[1], var_exp[2]))
+
+  base_theme <- list(
+    theme_classic(),
+    guides(alpha = "none"),
+    theme(axis.title.x = element_text(size = 24),
+          axis.title.y = element_text(size = 24)),
+    labs(x = paste0("PC1 (", round(var_exp[1], 1), "%)"),
+         y = paste0("PC2 (", round(var_exp[2], 1), "%)"),
+         title = paste0("PCA — ", tier_label))
+  )
+
+  p_treat <- ggplot(pca_df, aes(x = PC1, y = PC2,
+                                color = Treatments, fill = Treatments)) +
+    geom_point(aes(alpha = 0.2), size = 10, shape = 21, col = "black") +
+    scale_fill_manual(values = cbPaletteSmall, name = "Treatment") +
+    base_theme
+
+  p_spawn <- ggplot(pca_df, aes(x = PC1, y = PC2,
+                                color = Population, fill = Population)) +
+    geom_point(aes(alpha = 0.2), size = 10, shape = 21, col = "black") +
+    scale_fill_manual(values = cbPaletteSmall, name = "Spawn") +
+    base_theme
+
+  png(paste0(out_prefix, "_treat.png"), type = "cairo", units = "px",
+      width = 5400, height = 3000, res = 300, bg = "transparent")
+  print(p_treat); dev.off()
+
+  png(paste0(out_prefix, "_spawn.png"), type = "cairo", units = "px",
+      width = 5400, height = 3000, res = 300, bg = "transparent")
+  print(p_spawn); dev.off()
+
+  invisible(list(pca_df = pca_df, var_explained = var_exp,
+                 p_treat = p_treat, p_spawn = p_spawn))
+}
+```
+
+### Run all-samples PCA for each tier
+
+```{r}
+# All three tiers run across all 56 samples; block-restrict BS/Singleton later
+# if the all-block PCA is uninformative.
+pca.core <- run_tier_pca("Core.outlier.pca.sync",  "Core Loci",           "PC_Core")
+pca.bs   <- run_tier_pca("BS.outlier.pca.sync",    "Block-Specific Loci", "PC_BS")
+pca.sing <- run_tier_pca("Sing.outlier.pca.sync",  "Singleton Loci",      "PC_Sing")
+
+# Print in-line
+print(pca.core$p_treat)
+print(pca.bs$p_treat)
+print(pca.sing$p_treat)
+```
+
+### Per-block PCA helper function
+
+```{r}
+# run_block_pca_tier(): for a given tier's block-sync file, run the same
+# per-block (B10 / B11 / B12) PCA loop used for total.sig above.
+# Each block uses only its own samples and loci from the .pos file.
+#
+# Arguments:
+#   sync_file   — path to the tier-filtered block-level .sync file
+#   tier_label  — human-readable label used in plot titles and file names
+#
+# Note: BS and Singleton may have very few loci in a given block; the function
+# will warn and skip rather than error if < 2 variable loci remain.
+run_block_pca_tier <- function(sync_file, tier_label) {
+  cat(paste0("\n=== Per-block PCA: ", tier_label, " ===\n"))
+
+  treatment.labels <- c(rep("CA", 11), rep("CASE", 11), rep("CON", 11),
+                        rep("IS", 12), rep("SE", 11))
+  spawn.names <- c("B12","B11","B12","B10","B11","B10","B11","B12","B10","B12",
+                   "B11","B10","B11","B12","B12","B10","B12","B11","B10","B11",
+                   "B11","B12","B10","B11","B12","B11","B10","B12","B10","B11",
+                   "B12","B11","B12","B10","B11","B10","B11","B10","B11","B10",
+                   "B11","B12","B12","B12","B12","B11","B12","B10","B10","B11",
+                   "B11","B10","B12","B12","B11","B12")
+
+  inp    <- read.sync(file = sync_file, gen = seq(1, 56), repl = seq(1, 56),
+                      polarization = "rising")
+  inp.af <- af(inp, gen = seq(1, 56), repl = seq(1, 56))
+  colnames(inp.af) <- paste(treatment.labels, spawn.names, sep = "_")
+  colnames(inp.af) <- trimws(colnames(inp.af))
+
+  stages <- c("B10", "B11", "B12")
+  for (stage in stages) {
+    pos_data   <- get(paste0(tolower(stage), ".pos"))
+    stage_loci <- paste(pos_data[, 1], pos_data[, 2], sep = ".")
+    row_idx    <- rownames(inp.af) %in% stage_loci
+    cols_idx   <- grep(paste0("_", stage, "$"), colnames(inp.af))
+
+    cat(sprintf("  %s  loci_in_pos=%d  matched=%d  samples=%d\n",
+                stage, length(stage_loci), sum(row_idx), length(cols_idx)))
+
+    if (length(cols_idx) < 2 || sum(row_idx) < 2) {
+      warning(sprintf("Tier %s / Block %s: insufficient data — skipping.",
+                      tier_label, stage))
+      next
+    }
+
+    sub_mat <- inp.af[row_idx, cols_idx, drop = FALSE]
+    mat_t   <- t(sub_mat)
+    var_cols <- apply(mat_t, 2, var, na.rm = TRUE)
+    keep     <- which(var_cols > 0)
+    cat(sprintf("    zero-var loci removed: %d\n", sum(var_cols == 0)))
+
+    if (length(keep) < 2) {
+      warning(sprintf("Tier %s / Block %s: < 2 variable loci after filtering — skipping.",
+                      tier_label, stage))
+      next
+    }
+
+    mat_t2  <- mat_t[, keep, drop = FALSE]
+    pca_res <- prcomp(mat_t2, center = TRUE, scale. = FALSE)
+    pca_df  <- as.data.frame(pca_res$x)
+    var_exp <- (pca_res$sdev^2 / sum(pca_res$sdev^2)) * 100
+
+    samp_names    <- rownames(mat_t2)
+    pca_df$Treatment <- sub("_.*", "", samp_names)
+    pca_df$Spawn     <- sub(".*_", "", samp_names)
+
+    p <- ggplot(pca_df, aes(x = PC1, y = PC2, fill = Treatment)) +
+      geom_point(aes(alpha = 0.2), size = 6, shape = 21, color = "black") +
+      scale_fill_manual(values = cbPaletteSmall[-4], name = "Treatment") +
+      guides(alpha = "none") +
+      theme_classic() +
+      theme(axis.title.x = element_text(size = 14),
+            axis.title.y = element_text(size = 14),
+            plot.title   = element_text(hjust = 0.5)) +
+      labs(
+        title = paste0("PCA — ", tier_label, " / ", stage),
+        x = paste0("PC1 (", round(var_exp[1], 1), "%)"),
+        y = paste0("PC2 (", round(var_exp[2], 1), "%)")
+      )
+
+    outfile <- paste0("PC_", gsub(" ", "_", tier_label), "_", stage, ".png")
+    ggsave(outfile, plot = p, width = 12, height = 7, dpi = 300)
+    cat(sprintf("    saved: %s\n", outfile))
+  }
+}
+```
+
+### Run per-block PCA for each tier
+
+```{r}
+run_block_pca_tier("Core.outlier.pca.block.sync", "Core")
+run_block_pca_tier("BS.outlier.pca.block.sync",   "Block-Specific")
+run_block_pca_tier("Sing.outlier.pca.block.sync", "Singleton")
+```
 
