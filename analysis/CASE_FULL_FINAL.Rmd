@@ -1177,6 +1177,10 @@ write.table(total.sig, "Total.Significant.uf.Loci", sep = "\t", row.names = FALS
 # THREE-WAY SPLIT of significant loci
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Tiers are assigned hierarchically (Core > Aggregate > Block-Specific) so that
+# each locus appears in exactly one tier. A locus in Core is excluded from
+# Aggregate; a locus in Core or Aggregate is excluded from Block-Specific.
+
 # Core (Tiers A and B): strong replicated signal across multiple independent
 # spawning blocks. Consistent response regardless of block-specific variation
 # in effluent composition or larval pool standing genetic variation.
@@ -1190,8 +1194,9 @@ write.table(core.sig, "Sig.Loci.Core", sep = "\t", row.names = FALSE, quote = FA
 # Aggregate: loci with modest per-block signal (q < 0.01 in ≥1 block) that
 # cross-validate against the all-blocks analysis (q < 0.0001 in AB). Consistent
 # but weak selection signal detectable only in the aggregate analysis.
+# Core loci excluded — Core takes priority.
 aggregate.sig <- anti_join(
-  aggregate.sig,
+  anti_join(aggregate.sig, core.sig, by = "SNP"),
   all_con,
   by = "SNP"
 )
@@ -1201,9 +1206,12 @@ write.table(aggregate.sig, "Sig.Loci.Aggregate", sep = "\t", row.names = FALSE, 
 # q-values) restricted to singleton loci — those testable in only 1–2 blocks
 # due to insufficient coverage or variation across spawns. Signal may reflect
 # spawn-specific variation in effluent composition or standing genetic variation
-# in the larval pool.
+# in the larval pool. Core and Aggregate loci excluded.
 block.specific <- anti_join(
-  ppsig1.s,
+  anti_join(
+    anti_join(ppsig1.s, core.sig, by = "SNP"),
+    aggregate.sig, by = "SNP"
+  ),
   all_con,
   by = "SNP"
 )
