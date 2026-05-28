@@ -1170,28 +1170,31 @@ total.sig <- anti_join(
 write.table(total.sig, "Total.Significant.uf.Loci", sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# THREE-WAY SPLIT of significant loci
+# TWO-WAY SPLIT of significant loci
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Core: Tiers A–B + cross-dataset overlap, no Tier D contribution, CON-filtered
+# Core: Tiers A and B — loci with replicated signal across multiple independent
+# spawning blocks. Consistent response regardless of block-specific variation in
+# effluent composition or larval pool standing genetic variation.
 core.sig <- anti_join(
-  bind_rows(multiple.sig.o, all_sig, multi_sig),
+  bind_rows(all_sig, multi_sig),
   all_con,
   by = "SNP"
 )
 write.table(core.sig, "Sig.Loci.Core", sep = "\t", row.names = FALSE, quote = FALSE)
 
-# Block-Specific: Tier D loci that are neither singletons nor CON-flagged
-block.sig <- anti_join(
-  anti_join(tierD_all, singleton, by = "SNP"),
+# Block-Specific: cross-dataset validated loci (multiple.sig.o) and extreme
+# singleton Tier D loci (ppsig1.s). Signal did not replicate across blocks,
+# either due to block-specific variation in effluent composition or larval pool
+# standing genetic variation, or due to insufficient coverage in 2+ blocks
+# (singletons). Analytical support comes from AB cross-dataset confirmation
+# (multiple.sig.o) or extreme per-block signal (top 1% within significant set).
+block.specific <- anti_join(
+  bind_rows(multiple.sig.o, ppsig1.s),
   all_con,
   by = "SNP"
 )
-write.table(block.sig, "Sig.Loci.Block-Specific", sep = "\t", row.names = FALSE, quote = FALSE)
-
-# Singleton: Tier D loci that match the singleton list, CON-filtered
-singleton.sig <- anti_join(ppsig1.s, all_con, by = "SNP")
-write.table(singleton.sig, "Sig.Loci.Singleton", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(block.specific, "Sig.Loci.Block-Specific", sep = "\t", row.names = FALSE, quote = FALSE)
 ```
 #### Old Way
 ```{r}
@@ -1457,30 +1460,23 @@ source activate CASE
 
 # ─── bedtools CON-filtering for each locus tier ──────────────────────────────
 # con.loci.filter.bed (built above from ALL.CON.SNPS x gene model) is
-# reference-derived and applies equally to all tiers. core.sig, block.sig,
-# and singleton.sig were already R-level filtered with anti_join(... , all_con);
+# reference-derived and applies equally to all tiers. core.sig and block.specific
+# were already R-level filtered with anti_join(... , all_con);
 # this step removes any remaining loci overlapping CON-associated gene regions.
 
-# Core (Tiers A-C + cross-dataset overlap)
+# Core (Tiers A and B: loci significant across multiple blocks)
 cut -f2,3 Sig.Loci.Core | tail -n +2 | sort -k1,2 | uniq | \
   mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Core.loci.bed
 cat <(echo -e "SNP\tCHROM\tBP") \
   <(bedtools intersect -a Core.loci.bed -b con.loci.filter.bed | \
     mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Core.Loci.txt
 
-# Block-Specific (Tier D, non-singleton; filename quoted due to hyphen)
+# Block-Specific (Tier D outliers + cross-dataset validated; filename quoted due to hyphen)
 cut -f2,3 "Sig.Loci.Block-Specific" | tail -n +2 | sort -k1,2 | uniq | \
   mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > BS.loci.bed
 cat <(echo -e "SNP\tCHROM\tBP") \
   <(bedtools intersect -a BS.loci.bed -b con.loci.filter.bed | \
     mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.BS.Loci.txt
-
-# Singleton (Tier D, present in only one block)
-cut -f2,3 Sig.Loci.Singleton | tail -n +2 | sort -k1,2 | uniq | \
-  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Sing.loci.bed
-cat <(echo -e "SNP\tCHROM\tBP") \
-  <(bedtools intersect -a Sing.loci.bed -b con.loci.filter.bed | \
-    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Sing.Loci.txt
 ```
 
 ```{r}
@@ -1499,26 +1495,17 @@ write.table(grouped_core.sig, "Core.Significant.Grouped.Loci",
 
 # Block-Specific
 con_filter.bs <- read.table("ToFilter.Con.BS.Loci.txt", header = TRUE)
-block.sig <- unique(anti_join(block.sig, con_filter.bs, by = "SNP"))
-write.table(block.sig, "BS.Significant.Loci",
+block.specific <- unique(anti_join(block.specific, con_filter.bs, by = "SNP"))
+write.table(block.specific, "BS.Significant.Loci",
             sep = "\t", row.names = FALSE, quote = FALSE)
-grouped_block.sig <- group_and_average(block.sig)
-write.table(grouped_block.sig, "BS.Significant.Grouped.Loci",
-            sep = "\t", row.names = FALSE, quote = FALSE)
-
-# Singleton
-con_filter.sing <- read.table("ToFilter.Con.Sing.Loci.txt", header = TRUE)
-singleton.sig <- unique(anti_join(singleton.sig, con_filter.sing, by = "SNP"))
-write.table(singleton.sig, "Sing.Significant.Loci",
-            sep = "\t", row.names = FALSE, quote = FALSE)
-grouped_singleton.sig <- group_and_average(singleton.sig)
-write.table(grouped_singleton.sig, "Sing.Significant.Grouped.Loci",
+grouped_block.specific <- group_and_average(block.specific)
+write.table(grouped_block.specific, "BS.Significant.Grouped.Loci",
             sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ─── Per-treatment splits for each tier ──────────────────────────────────────
 # Mirrors the total.sig treatment splits above.
 # Sig.CA, Sig.SE, Sig.CASE are logical columns; "both" = loci sig in both CA and SE.
-# Empty subsets are expected for sparse tiers (BS, Singleton) in some categories.
+# Empty subsets are expected for the Block-Specific tier in some categories.
 
 # Core
 coresig.CA   <- subset(core.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
@@ -1531,29 +1518,19 @@ write.table(coresig.both, "sig.core.both", sep = "\t", row.names = FALSE, quote 
 write.table(coresig.CASE, "sig.core.case", sep = "\t", row.names = FALSE, quote = FALSE)
 
 # Block-Specific
-bssig.CA   <- subset(block.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
-bssig.SE   <- subset(block.sig, Sig.CA == FALSE & Sig.SE == TRUE)
-bssig.both <- subset(block.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
-bssig.CASE <- subset(block.sig, Sig.CASE == TRUE)
+bssig.CA   <- subset(block.specific, Sig.CA == TRUE  & Sig.SE == FALSE)
+bssig.SE   <- subset(block.specific, Sig.CA == FALSE & Sig.SE == TRUE)
+bssig.both <- subset(block.specific, Sig.CA == TRUE  & Sig.SE == TRUE)
+bssig.CASE <- subset(block.specific, Sig.CASE == TRUE)
 write.table(bssig.CA,   "sig.bs.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
 write.table(bssig.SE,   "sig.bs.se",   sep = "\t", row.names = FALSE, quote = FALSE)
 write.table(bssig.both, "sig.bs.both", sep = "\t", row.names = FALSE, quote = FALSE)
 write.table(bssig.CASE, "sig.bs.case", sep = "\t", row.names = FALSE, quote = FALSE)
-
-# Singleton
-singsig.CA   <- subset(singleton.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
-singsig.SE   <- subset(singleton.sig, Sig.CA == FALSE & Sig.SE == TRUE)
-singsig.both <- subset(singleton.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
-singsig.CASE <- subset(singleton.sig, Sig.CASE == TRUE)
-write.table(singsig.CA,   "sig.sing.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(singsig.SE,   "sig.sing.se",   sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(singsig.both, "sig.sing.both", sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(singsig.CASE, "sig.sing.case", sep = "\t", row.names = FALSE, quote = FALSE)
 ```
 
 ```{bash}
 # ─── Per-tier sig.table files (mirrors sig.table for total) ──────────────────
-for TIER in Core BS Sing; do
+for TIER in Core BS; do
   TIER_LC="${TIER,,}"
   cat <(echo -e "SNP\tGroup") \
     <(mawk '{if (NR > 1) print $1"\tSE"}'   sig.${TIER_LC}.se  ) \
