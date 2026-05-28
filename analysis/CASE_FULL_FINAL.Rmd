@@ -2440,22 +2440,38 @@ if(nrow(GO_combined) > 0) {
 ## Tier highlight helpers
 
 ```{r}
-# Color palette for the three locus tiers (colorblind-friendly)
-tier_colors <- c(
-  "Core"           = "#E69F00",   # amber  — high-confidence, multi-block
-  "Aggregate"      = "#009E73",   # teal   — per-block + all-blocks cross-validated
-  "Block-Specific" = "#0072B2"    # blue   — single-block outliers (lowcov or lowvar)
-)
+# lighten_color(): blend a hex color with white.
+# factor = 0 returns the original; factor = 1 returns white.
+lighten_color <- function(col, factor = 0.5) {
+  v <- col2rgb(col) / 255
+  rgb(v[1] + (1 - v[1]) * factor,
+      v[2] + (1 - v[2]) * factor,
+      v[3] + (1 - v[3]) * factor)
+}
+
+# make_tier_palette(): given a base treatment color, return a named fill vector
+# for scale_fill_manual(). Core = full color, Aggregate and Block-Specific are
+# progressively lighter tints of the same hue.
+make_tier_palette <- function(base_color) {
+  c(
+    "Core"           = base_color,
+    "Aggregate"      = lighten_color(base_color, 0.45),
+    "Block-Specific" = lighten_color(base_color, 0.72)
+  )
+}
 
 # build_tier_highlights(): given the ggman data frame (dfm) for one block and
-# one treatment column, returns a data frame with a Tier column for the
-# three locus tiers. Used to color-code outlier points in Manhattan plots.
+# one treatment column, returns a data frame with a Tier factor column.
+# Pass the result to geom_point(fill = Tier) + scale_fill_manual(make_tier_palette(...)).
 #
 # Arguments:
-#   dfm           — ggman plot data frame (output of ggman()[[1]])
-#   block_num     — integer block ID (10, 11, or 12)
-#   treatment_col — string name of the significance column (e.g. "Sig.CASE")
-build_tier_highlights <- function(dfm, block_num, treatment_col) {
+#   dfm             — ggman plot data frame (output of ggman()[[1]])
+#   block_num       — integer block ID (10, 11, or 12)
+#   treatment_col   — string name of the significance column (e.g. "Sig.CASE")
+#   highlight_color — base treatment color (e.g. "#009E73" for CASE, "#0072B2"
+#                     for SE, "#E69F00" for CA) — passed to make_tier_palette()
+#                     for scale_fill_manual() in the calling plot code
+build_tier_highlights <- function(dfm, block_num, treatment_col, highlight_color = NULL) {
   h.core <- core.sig       %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
   h.agg  <- aggregate.sig  %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
   h.bs   <- block.specific %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
@@ -2471,6 +2487,9 @@ build_tier_highlights <- function(dfm, block_num, treatment_col) {
 
 #### CASE
 ```{r, warning =FALSE, eval = FALSE}
+# Treatment color and tier tint palette for CASE Manhattan plots
+tier_fill <- make_tier_palette("#009E73")
+
 b10.h <- subset(total.sig,  BLOCK == "10" & Sig.CASE == TRUE)
 b10.c <- subset(B10.pv, QCON < 0.1)
 
@@ -2504,7 +2523,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b10.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
@@ -2551,7 +2570,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b11.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
@@ -2598,7 +2617,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b12.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
@@ -2700,6 +2719,9 @@ null <- dev.off()
 
 #### SE
 ```{r, warning =FALSE, eval = FALSE}
+# Treatment color and tier tint palette for SE Manhattan plots
+tier_fill <- make_tier_palette("#0072B2")
+
 b10.h <- subset(total.sig,  BLOCK == "10" & Sig.SE == TRUE)
 b10.c <- subset(B10.pv, QCON < 0.1)
 
@@ -2732,7 +2754,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b10.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
@@ -2779,7 +2801,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b11.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
@@ -2825,7 +2847,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b12.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
@@ -2930,6 +2952,9 @@ null <- dev.off()
 
 #### CA
 ```{r, warning =FALSE, eval = FALSE}
+# Treatment color and tier tint palette for CA Manhattan plots
+tier_fill <- make_tier_palette("#E69F00")
+
 b10.h <- subset(total.sig,  BLOCK == "10" & Sig.CA == TRUE)
 b10.c <- subset(B10.pv, QCON < 0.1)
 
@@ -2962,7 +2987,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b10.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
@@ -3009,7 +3034,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b11.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
@@ -3055,7 +3080,7 @@ xbreaks <- sapply(dfmsplit,function(x) {
 b12.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
   geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
-  scale_fill_manual(values=tier_colors, name="Locus Tier") +
+  scale_fill_manual(values=tier_fill, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
   guides(colour="none", alpha="none", size="none") +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
