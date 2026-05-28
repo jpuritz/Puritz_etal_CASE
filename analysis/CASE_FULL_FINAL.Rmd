@@ -1257,7 +1257,7 @@ write.table(total.sig, "Total.Significant.uf.Loci", sep = "\t", row.names = FALS
 # signal is driven by a single polymorphic spawn — the other two blocks are
 # near-fixed (MAF < 0.015), so the AB result is not cross-block validation.
 # bs_source records whether a Block-Specific locus originated from the
-# Aggregate candidates ("Aggregate") or Tier D directly ("Single").
+# Aggregate candidates ("Aggregate") or directly from per-block outlier filtering ("Single").
 
 # Core (Tiers A and B): strong replicated signal across multiple independent
 # spawning blocks. Consistent response regardless of block-specific variation
@@ -1281,7 +1281,7 @@ aggregate.sig  <- anti_join(agg_candidates, sing.lowvar, by = "SNP") %>%
 write.table(aggregate.sig, "Sig.Loci.Aggregate", sep = "\t", row.names = FALSE, quote = FALSE)
 
 # Block-Specific: two sources combined, annotated by bs_source.
-# "Single"    — Tier D top-5% outliers among singleton loci (testable in 1–2 blocks
+# "Single"    — top-5% per-block outliers among singleton loci (testable in 1–2 blocks
 #               only due to low coverage or near-fixation in absent spawns).
 # "Aggregate" — lowvar singletons reclassified from Aggregate: near-fixed in absent
 #               blocks, so AB signal was single-spawn-driven rather than cross-validated.
@@ -1951,7 +1951,7 @@ png(filename = "TestGO.Core.png", type = "cairo", units = "px",
 pp.core
 dev.off()
 
-# Block-Specific loci — Tier D non-singleton locus set
+# Block-Specific loci
 gostres.bs <- gost(
   query         = list(
     "CASE" = read.table("Sig.loci.BS.CASE.LOC", header = FALSE),
@@ -1971,7 +1971,7 @@ png(filename = "TestGO.BS.png", type = "cairo", units = "px",
 pp.bs
 dev.off()
 
-# Singleton loci — Tier D single-block locus set
+# Singleton loci — single-block locus set
 gostres.sing <- gost(
   query         = list(
     "CASE" = read.table("Sig.loci.Sing.CASE.LOC", header = FALSE),
@@ -2072,7 +2072,7 @@ awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Core_SE_cand_genes_GO.t
 grep -F -f ../Sig.loci.Core.CASE.LOC   gene2go_full.tab > Core_CASE_cand_genes_GO.tab
 awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Core_CASE_cand_genes_GO.tab > Core_CASE_cand_genes_GO_head.tab
 
-# --- Block-Specific loci (Tier D, non-singleton) ---
+# --- Block-Specific loci ---
 grep -F -f ../Sig.loci.BS.TOTAL.LOC    gene2go_full.tab > BS_ALL_cand_genes_GO.tab
 awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_ALL_cand_genes_GO.tab    > BS_ALL_cand_genes_GO_head.tab
 
@@ -2085,7 +2085,7 @@ awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_SE_cand_genes_GO.tab
 grep -F -f ../Sig.loci.BS.CASE.LOC     gene2go_full.tab > BS_CASE_cand_genes_GO.tab
 awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_CASE_cand_genes_GO.tab   > BS_CASE_cand_genes_GO_head.tab
 
-# --- Singleton loci (Tier D, single-block only) ---
+# --- Singleton loci (single-block only) ---
 # Note: these files may be empty if singleton loci map to no annotated genes;
 # downstream R code handles empty input gracefully via run_topGO_analysis().
 grep -F -f ../Sig.loci.Sing.TOTAL.LOC  gene2go_full.tab > Sing_ALL_cand_genes_GO.tab
@@ -2235,7 +2235,7 @@ GO_Core_CASE <- run_topGO_analysis("GO/Core_CASE_cand_genes_GO_head.tab", all_ge
 ### Run GO enrichment for Block-Specific loci
 
 ```{r}
-# Block-Specific loci: Tier D non-singleton; significant in exactly one block
+# Block-Specific loci: per-block outlier singletons and reclassified Aggregate loci
 GO_BS_ALL  <- run_topGO_analysis("GO/BS_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Block-Specific: All Outliers")
 GO_BS_CA   <- run_topGO_analysis("GO/BS_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Block-Specific: CA")
 GO_BS_SE   <- run_topGO_analysis("GO/BS_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Block-Specific: SE")
@@ -2245,7 +2245,7 @@ GO_BS_CASE <- run_topGO_analysis("GO/BS_CASE_cand_genes_GO_head.tab", all_genes,
 ### Run GO enrichment for Singleton loci
 
 ```{r}
-# Singleton loci: Tier D single-block; may return NULL if too few annotated genes
+# Singleton loci: single-block only; may return NULL if too few annotated genes
 GO_Sing_ALL  <- run_topGO_analysis("GO/Sing_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Singleton: All Outliers")
 GO_Sing_CA   <- run_topGO_analysis("GO/Sing_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Singleton: CA")
 GO_Sing_SE   <- run_topGO_analysis("GO/Sing_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Singleton: SE")
@@ -3518,10 +3518,10 @@ draw_tier_venn <- function(gdf, png_file, title = "") {
 # --- Core loci (Tiers A–C, multi-block) ---
 draw_tier_venn(grouped_core.sig, "VenCore.png",   "Core")
 
-# --- Block-Specific loci (Tier D, non-singleton) ---
+# --- Block-Specific loci ---
 draw_tier_venn(grouped_block.sig, "VenBS.png",    "Block-Specific")
 
-# --- Singleton loci (Tier D, single-block) ---
+# --- Singleton loci (single-block) ---
 # May produce zero-area circles for some stressors if no singletons pass that filter
 draw_tier_venn(grouped_singleton.sig, "VenSing.png", "Singleton")
 ```
