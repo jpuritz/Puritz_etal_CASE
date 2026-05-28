@@ -1004,14 +1004,16 @@ apply_treatment_filter <- function(df, keep_treatment) {
   df
 }
 
-# top1pct_filter: within the already-significant loci (df), retain only those
-# whose treatment q-value falls in the top 1% of that significant set.
-# The quantile is intentionally computed on df, not the full distribution.
-top1pct_filter <- function(df) {
+# top5pct_filter: within the already-significant loci (df), retain only those
+# whose treatment q-value falls in the top 5% of that significant set.
+# The quantile is intentionally computed on df (the pre-filtered set), not the
+# full distribution — we want the strongest signals among loci that already
+# passed the FDR threshold, not genome-wide top 5%.
+top5pct_filter <- function(df) {
   subset(df,
-    (Sig.CASE == TRUE & QCASE < quantile(df$QCASE, na.rm = TRUE, probs = 0.01)) |
-    (Sig.CA   == TRUE & QCA   < quantile(df$QCA,   na.rm = TRUE, probs = 0.01)) |
-    (Sig.SE   == TRUE & QSE   < quantile(df$QSE,   na.rm = TRUE, probs = 0.01))
+    (Sig.CASE == TRUE & QCASE < quantile(df$QCASE, na.rm = TRUE, probs = 0.05)) |
+    (Sig.CA   == TRUE & QCA   < quantile(df$QCA,   na.rm = TRUE, probs = 0.05)) |
+    (Sig.SE   == TRUE & QSE   < quantile(df$QSE,   na.rm = TRUE, probs = 0.05))
   )
 }
 
@@ -1109,14 +1111,14 @@ write.table(ppsig.B11.01,    "Sig.Loci.FDR01.Block11",  sep = "\t", row.names = 
 write.table(ppsig.B12.01,    "Sig.Loci.FDR01.Block12",  sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TIER D: q < 0.01 AND top 1% of the genome-wide q-value distribution
+# BLOCK-SPECIFIC TIER: q < 0.01 AND top 5% of q-values within the significant set
 # ══════════════════════════════════════════════════════════════════════════════
-# top1pct_filter(full_pv) computes the 1st-percentile threshold from the full
-# unfiltered block data, not the pre-filtered significant set (Old Way bug fixed).
+# top5pct_filter selects the strongest signals among already-significant loci.
+# Restricted to singletons (loci testable in only 1–2 blocks) via semi_join below.
 
-ppsig.B10 <- Significat_subset(B10.pv, alpha,     alpha2) %>% top1pct_filter()
-ppsig.B11 <- Significat_subset(B11.pv, B11.alpha, alpha2) %>% top1pct_filter()
-ppsig.B12 <- Significat_subset(B12.pv, alpha,     alpha2) %>% top1pct_filter()
+ppsig.B10 <- Significat_subset(B10.pv, alpha,     alpha2) %>% top5pct_filter()
+ppsig.B11 <- Significat_subset(B11.pv, B11.alpha, alpha2) %>% top5pct_filter()
+ppsig.B12 <- Significat_subset(B12.pv, alpha,     alpha2) %>% top5pct_filter()
 
 ppsig.B10$BLOCK <- 10
 ppsig.B11$BLOCK <- 11
@@ -1128,27 +1130,31 @@ tierD_all <- rbind(ppsig.B10, ppsig.B11, ppsig.B12)
 ppsig1.s  <- semi_join(tierD_all, singleton, by = "SNP")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CROSS-DATASET TIER: per-block q < 0.01 AND AB q < 0.0001 (multiple.sig.o)
+# AGGREGATE TIER: per-block q < 0.01 in ≥1 block AND q < 0.0001 in all-blocks (AB)
 # ══════════════════════════════════════════════════════════════════════════════
+# These loci have modest per-block signal that cross-validates against the
+# pooled all-blocks analysis. Detected in aggregate rather than any single
+# spawning block — indicating consistent but weak selection below individual-block
+# detection power. BLOCK 33 is a dummy identifier for the AB dataset.
 ppsig1.ab       <- Significat_subset(AB.pv, 0.0001, alpha2)
 ppsig1.ab$BLOCK <- 33
 
-multiple.sig.SE <- bind_rows(subset(ppsig3.FDR01, Sig.SE   == TRUE),
-                              subset(ppsig1.ab,    Sig.SE   == TRUE)) %>%
-                   group_by(SNP) %>% filter(n() > 1) %>%
-                   apply_treatment_filter("Sig.SE")
+agg.SE <- bind_rows(subset(ppsig3.FDR01, Sig.SE   == TRUE),
+                    subset(ppsig1.ab,    Sig.SE   == TRUE)) %>%
+          group_by(SNP) %>% filter(n() > 1) %>%
+          apply_treatment_filter("Sig.SE")
 
-multiple.sig.CASE <- bind_rows(subset(ppsig3.FDR01, Sig.CASE == TRUE),
-                                subset(ppsig1.ab,    Sig.CASE == TRUE)) %>%
-                     group_by(SNP) %>% filter(n() > 1) %>%
-                     apply_treatment_filter("Sig.CASE")
+agg.CASE <- bind_rows(subset(ppsig3.FDR01, Sig.CASE == TRUE),
+                      subset(ppsig1.ab,    Sig.CASE == TRUE)) %>%
+            group_by(SNP) %>% filter(n() > 1) %>%
+            apply_treatment_filter("Sig.CASE")
 
-multiple.sig.CA <- bind_rows(subset(ppsig3.FDR01, Sig.CA   == TRUE),
-                              subset(ppsig1.ab,    Sig.CA   == TRUE)) %>%
-                   group_by(SNP) %>% filter(n() > 1) %>%
-                   apply_treatment_filter("Sig.CA")
+agg.CA <- bind_rows(subset(ppsig3.FDR01, Sig.CA   == TRUE),
+                    subset(ppsig1.ab,    Sig.CA   == TRUE)) %>%
+          group_by(SNP) %>% filter(n() > 1) %>%
+          apply_treatment_filter("Sig.CA")
 
-multiple.sig.o <- bind_rows(multiple.sig.SE, multiple.sig.CASE, multiple.sig.CA)
+aggregate.sig <- bind_rows(agg.SE, agg.CASE, agg.CA)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CON FILTER
@@ -1160,22 +1166,22 @@ all_con  <- subset(all_con, QCON / QCASE < 10 & QCON / QCA < 10 & QCON / QSE < 1
 write.table(all_con, "ALL.CON.SNPS", sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FINAL UNION
+# FINAL UNION: all three tiers combined, CON-filtered
 # ══════════════════════════════════════════════════════════════════════════════
 total.sig <- anti_join(
-  bind_rows(multiple.sig.o, all_sig, multi_sig, ppsig1.s),
+  bind_rows(all_sig, multi_sig, aggregate.sig, ppsig1.s),
   all_con,
   by = "SNP"
 )
 write.table(total.sig, "Total.Significant.uf.Loci", sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TWO-WAY SPLIT of significant loci
+# THREE-WAY SPLIT of significant loci
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Core: Tiers A and B — loci with replicated signal across multiple independent
-# spawning blocks. Consistent response regardless of block-specific variation in
-# effluent composition or larval pool standing genetic variation.
+# Core (Tiers A and B): strong replicated signal across multiple independent
+# spawning blocks. Consistent response regardless of block-specific variation
+# in effluent composition or larval pool standing genetic variation.
 core.sig <- anti_join(
   bind_rows(all_sig, multi_sig),
   all_con,
@@ -1183,14 +1189,23 @@ core.sig <- anti_join(
 )
 write.table(core.sig, "Sig.Loci.Core", sep = "\t", row.names = FALSE, quote = FALSE)
 
-# Block-Specific: cross-dataset validated loci (multiple.sig.o) and extreme
-# singleton Tier D loci (ppsig1.s). Signal did not replicate across blocks,
-# either due to block-specific variation in effluent composition or larval pool
-# standing genetic variation, or due to insufficient coverage in 2+ blocks
-# (singletons). Analytical support comes from AB cross-dataset confirmation
-# (multiple.sig.o) or extreme per-block signal (top 1% within significant set).
+# Aggregate: loci with modest per-block signal (q < 0.01 in ≥1 block) that
+# cross-validate against the all-blocks analysis (q < 0.0001 in AB). Consistent
+# but weak selection signal detectable only in the aggregate analysis.
+aggregate.sig <- anti_join(
+  aggregate.sig,
+  all_con,
+  by = "SNP"
+)
+write.table(aggregate.sig, "Sig.Loci.Aggregate", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Block-Specific: extreme per-block outliers (top 5% of already-significant
+# q-values) restricted to singleton loci — those testable in only 1–2 blocks
+# due to insufficient coverage or variation across spawns. Signal may reflect
+# spawn-specific variation in effluent composition or standing genetic variation
+# in the larval pool.
 block.specific <- anti_join(
-  bind_rows(multiple.sig.o, ppsig1.s),
+  ppsig1.s,
   all_con,
   by = "SNP"
 )
@@ -1460,18 +1475,25 @@ source activate CASE
 
 # ─── bedtools CON-filtering for each locus tier ──────────────────────────────
 # con.loci.filter.bed (built above from ALL.CON.SNPS x gene model) is
-# reference-derived and applies equally to all tiers. core.sig and block.specific
-# were already R-level filtered with anti_join(... , all_con);
+# reference-derived and applies equally to all tiers. core.sig, aggregate.sig,
+# and block.specific were already R-level filtered with anti_join(... , all_con);
 # this step removes any remaining loci overlapping CON-associated gene regions.
 
-# Core (Tiers A and B: loci significant across multiple blocks)
+# Core (Tiers A and B: strong replicated signal across multiple blocks)
 cut -f2,3 Sig.Loci.Core | tail -n +2 | sort -k1,2 | uniq | \
   mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Core.loci.bed
 cat <(echo -e "SNP\tCHROM\tBP") \
   <(bedtools intersect -a Core.loci.bed -b con.loci.filter.bed | \
     mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Core.Loci.txt
 
-# Block-Specific (Tier D outliers + cross-dataset validated; filename quoted due to hyphen)
+# Aggregate (q<0.01 per-block AND q<0.0001 all-blocks; consistent weak signal)
+cut -f2,3 Sig.Loci.Aggregate | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Agg.loci.bed
+cat <(echo -e "SNP\tCHROM\tBP") \
+  <(bedtools intersect -a Agg.loci.bed -b con.loci.filter.bed | \
+    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Agg.Loci.txt
+
+# Block-Specific (top 5% outliers among singletons; filename quoted due to hyphen)
 cut -f2,3 "Sig.Loci.Block-Specific" | tail -n +2 | sort -k1,2 | uniq | \
   mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > BS.loci.bed
 cat <(echo -e "SNP\tCHROM\tBP") \
@@ -1493,6 +1515,15 @@ grouped_core.sig <- group_and_average(core.sig)
 write.table(grouped_core.sig, "Core.Significant.Grouped.Loci",
             sep = "\t", row.names = FALSE, quote = FALSE)
 
+# Aggregate
+con_filter.agg <- read.table("ToFilter.Con.Agg.Loci.txt", header = TRUE)
+aggregate.sig <- unique(anti_join(aggregate.sig, con_filter.agg, by = "SNP"))
+write.table(aggregate.sig, "Agg.Significant.Loci",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+grouped_aggregate.sig <- group_and_average(aggregate.sig)
+write.table(grouped_aggregate.sig, "Agg.Significant.Grouped.Loci",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+
 # Block-Specific
 con_filter.bs <- read.table("ToFilter.Con.BS.Loci.txt", header = TRUE)
 block.specific <- unique(anti_join(block.specific, con_filter.bs, by = "SNP"))
@@ -1505,7 +1536,7 @@ write.table(grouped_block.specific, "BS.Significant.Grouped.Loci",
 # ─── Per-treatment splits for each tier ──────────────────────────────────────
 # Mirrors the total.sig treatment splits above.
 # Sig.CA, Sig.SE, Sig.CASE are logical columns; "both" = loci sig in both CA and SE.
-# Empty subsets are expected for the Block-Specific tier in some categories.
+# Empty subsets are possible for sparse tiers in some treatment categories.
 
 # Core
 coresig.CA   <- subset(core.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
@@ -1516,6 +1547,16 @@ write.table(coresig.CA,   "sig.core.ca",   sep = "\t", row.names = FALSE, quote 
 write.table(coresig.SE,   "sig.core.se",   sep = "\t", row.names = FALSE, quote = FALSE)
 write.table(coresig.both, "sig.core.both", sep = "\t", row.names = FALSE, quote = FALSE)
 write.table(coresig.CASE, "sig.core.case", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Aggregate
+aggsig.CA   <- subset(aggregate.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
+aggsig.SE   <- subset(aggregate.sig, Sig.CA == FALSE & Sig.SE == TRUE)
+aggsig.both <- subset(aggregate.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
+aggsig.CASE <- subset(aggregate.sig, Sig.CASE == TRUE)
+write.table(aggsig.CA,   "sig.agg.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(aggsig.SE,   "sig.agg.se",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(aggsig.both, "sig.agg.both", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(aggsig.CASE, "sig.agg.case", sep = "\t", row.names = FALSE, quote = FALSE)
 
 # Block-Specific
 bssig.CA   <- subset(block.specific, Sig.CA == TRUE  & Sig.SE == FALSE)
@@ -1530,7 +1571,7 @@ write.table(bssig.CASE, "sig.bs.case", sep = "\t", row.names = FALSE, quote = FA
 
 ```{bash}
 # ─── Per-tier sig.table files (mirrors sig.table for total) ──────────────────
-for TIER in Core BS; do
+for TIER in Core Agg BS; do
   TIER_LC="${TIER,,}"
   cat <(echo -e "SNP\tGroup") \
     <(mawk '{if (NR > 1) print $1"\tSE"}'   sig.${TIER_LC}.se  ) \
