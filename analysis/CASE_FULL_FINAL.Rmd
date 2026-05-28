@@ -1089,9 +1089,7 @@ multi_sig <- rbind(multi_sig.CA, multi_sig.CASE, multi_sig.SE)
 write.table(multi_sig, "Sig.Loci.2", sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ── Per-block q < 0.01 intermediates ─────────────────────────────────────────
-# ppsig3.FDR01 feeds both Tier D and the cross-dataset tier.
-# The 2-block filter (multi_sig.01) has been dropped as redundant with multi_sig:
-# any locus at q < 0.01 in 2+ blocks is already captured at q < 0.05 in 2+ blocks.
+# ppsig3.FDR01 feeds BLOCK-SPECIFIC TIER and AGGREGATE TIER:
 alpha  <- 0.01
 alpha2 <- 0.10
 B11.alpha <- alpha * 2  # Block 11 correction: 0.02
