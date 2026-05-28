@@ -2501,10 +2501,10 @@ b10.c <- subset(B10.pv, QCON < 0.1)
 B10.pp <- B10.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b10.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
@@ -2547,10 +2547,10 @@ b11.c <- subset(B11.pv, QCON < 0.1)
 B11.pp <- B11.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b11.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
@@ -2595,10 +2595,10 @@ b12.c <- subset(B12.pv, QCON < 0.1)
 B12.pp <- B12.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b12.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
@@ -2732,10 +2732,10 @@ b10.c <- subset(B10.pv, QCON < 0.1)
 B10.pp <- B10.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b10.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
@@ -2778,10 +2778,10 @@ b11.c <- subset(B11.pv, QCON < 0.1)
 B11.pp <- B11.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b11.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
@@ -2825,10 +2825,10 @@ b12.c <- subset(B12.pv, QCON < 0.1)
 B12.pp <- B12.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b12.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
@@ -2965,10 +2965,10 @@ b10.c <- subset(B10.pv, QCON < 0.1)
 B10.pp <- B10.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b10.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
@@ -3011,10 +3011,10 @@ b11.c <- subset(B11.pv, QCON < 0.1)
 B11.pp <- B11.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b11.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
@@ -3058,10 +3058,10 @@ b12.c <- subset(B12.pv, QCON < 0.1)
 B12.pp <- B12.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b12.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
+      SNP %in% singleton$SNP ~ "Single-Block",
       TRUE ~ "Shared SNP"
     )
   )
