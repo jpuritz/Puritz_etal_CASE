@@ -506,6 +506,83 @@ venn.plot <- draw.triple.venn(
 dev.off()
 ```
 
+## Differentiate Singleton Loci
+```{bash}
+source activate CASE
+
+tail -n +2 singleton.loci | awk '{
+  match($1, /_[0-9]+$/)
+  print substr($1, 1, RSTART-1) "\t" substr($1, RSTART+1)
+}' > sing.pos.txt
+
+mawk 'BEGIN {
+  FS = "\t"
+  maf_min   = 0.015
+  depth_min = 20
+  while ((getline line < "sing.pos.txt") > 0) {
+    split(line, p, "\t")
+    sing[p[1] FS p[2]] = 1
+  }
+  close("sing.pos.txt")
+  print "SNP\tdepth_b10\tmaf_b10\tdepth_b11\tmaf_b11\tdepth_b12\tmaf_b12\tdropout_type"
+}
+NR == 1 {
+  nb10 = nb11 = nb12 = 0
+  for (i = 1; i <= NF; i++) {
+    if ($i ~ /B10/) c10[++nb10] = i
+    if ($i ~ /B11/) c11[++nb11] = i
+    if ($i ~ /B12/) c12[++nb12] = i
+  }
+  next
+}
+!(($1 FS $2) in sing) { next }
+function block_maf(cols, ncols,    i, ct, d, d_total, minor_total, max_ct) {
+  d_total = 0; minor_total = 0
+  for (i = 1; i <= ncols; i++) {
+    split($(cols[i]), ct, ":")
+    d = ct[1]+ct[2]+ct[3]+ct[4]
+    d_total += d
+    if (d > 0) {
+      max_ct = ct[1]
+      if (ct[2] > max_ct) max_ct = ct[2]
+      if (ct[3] > max_ct) max_ct = ct[3]
+      if (ct[4] > max_ct) max_ct = ct[4]
+      minor_total += d - max_ct
+    }
+  }
+  bd_out   = d_total
+  bmaf_out = (d_total > 0) ? minor_total / d_total : -1
+}
+{
+  block_maf(c10, nb10); d10=bd_out; m10=bmaf_out
+  block_maf(c11, nb11); d11=bd_out; m11=bmaf_out
+  block_maf(c12, nb12); d12=bd_out; m12=bmaf_out
+  snp = $1"_"$2
+
+  # Near-fixed in an absent block = adequate depth but MAF below threshold
+  lv10 = (d10>=depth_min && m10>=0 && m10<maf_min) ? 1 : 0
+  lv11 = (d11>=depth_min && m11>=0 && m11<maf_min) ? 1 : 0
+  lv12 = (d12>=depth_min && m12>=0 && m12<maf_min) ? 1 : 0
+
+  type = (lv10||lv11||lv12) ? "low_variation" : "low_coverage"
+  printf "%s\t%d\t%.4f\t%d\t%.4f\t%d\t%.4f\t%s\n", \
+    snp, d10, m10, d11, m11, d12, m12, type
+}' CASE.All.Blocks.sync > singleton.loci.classified.txt
+
+echo "Breakdown by dropout type:"
+cut -f8 singleton.loci.classified.txt | sort | uniq -c
+
+awk 'NR==1 || $8=="low_variation" {print $1}' singleton.loci.classified.txt > singleton.loci.lowvar
+awk 'NR==1 || $8=="low_coverage"  {print $1}' singleton.loci.classified.txt > singleton.loci.lowcov
+```
+
+```{r}
+sing_class <- read.table("singleton.loci.classified.txt", header = TRUE, sep = "\t")
+write.table(filter(sing_class, dropout_type == "low_variation") %>% select(SNP),
+            "singleton.loci.lowvar", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(filter(sing_class, dropout_type == "low_coverage") %>% select(SNP),
+            "singleton.loci.lowcov", sep = "\t", row.names = FALSE, quote = FALSE)
+```
 # Individual Blocks for outlier testing
 #### B10
 ```{bash, eval=FALSE}
@@ -1011,9 +1088,9 @@ apply_treatment_filter <- function(df, keep_treatment) {
 # passed the FDR threshold, not genome-wide top 5%.
 top5pct_filter <- function(df) {
   subset(df,
-    (Sig.CASE == TRUE & QCASE < quantile(df$QCASE, na.rm = TRUE, probs = 0.05)) |
-    (Sig.CA   == TRUE & QCA   < quantile(df$QCA,   na.rm = TRUE, probs = 0.05)) |
-    (Sig.SE   == TRUE & QSE   < quantile(df$QSE,   na.rm = TRUE, probs = 0.05))
+    (Sig.CASE == TRUE & QCASE < quantile(df$QCASE, na.rm = TRUE, probs = 0.01)) |
+    (Sig.CA   == TRUE & QCA   < quantile(df$QCA,   na.rm = TRUE, probs = 0.01)) |
+    (Sig.SE   == TRUE & QSE   < quantile(df$QSE,   na.rm = TRUE, probs = 0.01))
   )
 }
 
