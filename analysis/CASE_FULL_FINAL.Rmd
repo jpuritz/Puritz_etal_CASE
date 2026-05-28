@@ -2474,7 +2474,11 @@ make_tier_palette <- function(base_color) {
 build_tier_highlights <- function(dfm, block_num, treatment_col, highlight_color = NULL) {
   h.core <- core.sig       %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
   h.agg  <- aggregate.sig  %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
-  h.bs   <- block.specific %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
+  # Block-Specific: no BLOCK filter — highlight any known singleton outlier visible in
+  # this plot regardless of which block it was identified in. block.specific already
+  # carries correct BLOCK provenance; we're not conflating blocks, just displaying known
+  # outliers wherever they appear significant.
+  h.bs   <- block.specific %>% filter(.data[[treatment_col]] == TRUE)
 
   bind_rows(
     semi_join(dfm, h.core, by = "SNP") %>% mutate(Tier = "Core"),
