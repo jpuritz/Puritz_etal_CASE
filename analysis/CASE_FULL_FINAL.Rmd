@@ -575,14 +575,6 @@ cut -f8 singleton.loci.classified.txt | sort | uniq -c
 awk 'NR==1 || $8=="low_variation" {print $1}' singleton.loci.classified.txt > singleton.loci.lowvar
 awk 'NR==1 || $8=="low_coverage"  {print $1}' singleton.loci.classified.txt > singleton.loci.lowcov
 ```
-
-```{r}
-sing_class <- read.table("singleton.loci.classified.txt", header = TRUE, sep = "\t")
-write.table(filter(sing_class, dropout_type == "low_variation") %>% select(SNP),
-            "singleton.loci.lowvar", sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(filter(sing_class, dropout_type == "low_coverage") %>% select(SNP),
-            "singleton.loci.lowcov", sep = "\t", row.names = FALSE, quote = FALSE)
-```
 # Individual Blocks for outlier testing
 #### B10
 ```{bash, eval=FALSE}
@@ -1293,6 +1285,16 @@ block.specific <- anti_join(
   by = "SNP"
 )
 write.table(block.specific, "Sig.Loci.Block-Specific", sep = "\t", row.names = FALSE, quote = FALSE)
+```
+
+```{r}
+singleton       <- read.table("singleton.loci",         header = TRUE)
+sing.lowvar     <- read.table("singleton.loci.lowvar",   header = TRUE)
+sing.lowcov     <- read.table("singleton.loci.lowcov",   header = TRUE)
+
+ppsig1.s        <- semi_join(tierD_all, singleton,   by = "SNP")  # combined (for total.sig)
+ppsig1.s.lowvar <- semi_join(tierD_all, sing.lowvar, by = "SNP")
+ppsig1.s.lowcov <- semi_join(tierD_all, sing.lowcov, by = "SNP")
 ```
 #### Old Way
 ```{r}
