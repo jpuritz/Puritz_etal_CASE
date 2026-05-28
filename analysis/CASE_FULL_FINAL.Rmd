@@ -1788,7 +1788,7 @@ verify_col_indices("Total.Significant.Loci",         loci_expected)
 verify_col_indices("Total.Significant.Grouped.Loci", grouped_expected)
 message("Total: column indices verified")
 
-for (tier in c("Core", "BS", "Sing")) {
+for (tier in c("Core", "Agg", "BS")) {
   verify_col_indices(paste0(tier, ".Significant.Loci"),         loci_expected)
   verify_col_indices(paste0(tier, ".Significant.Grouped.Loci"), grouped_expected)
   message(tier, ": column indices verified")
@@ -1813,10 +1813,10 @@ cut -f2,3 BS.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
 bedtools intersect -wb -a BS.Significant.loci.bed -b $GENE_BED | \
   grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.BS.TOTAL.LOC
 
-cut -f2,3 Sing.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
-  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Sing.Significant.loci.bed
-bedtools intersect -wb -a Sing.Significant.loci.bed -b $GENE_BED | \
-  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.Sing.TOTAL.LOC
+cut -f2,3 Agg.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Agg.Significant.loci.bed
+bedtools intersect -wb -a Agg.Significant.loci.bed -b $GENE_BED | \
+  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.Agg.TOTAL.LOC
 ```
 
 ```{bash}
@@ -1831,7 +1831,7 @@ GENE_BED=~/CASE/analysis/sorted.ref3.0.gene.bed
 #                               col 14 = CHROM, col 15 = BP
 # Empty output files are expected for sparse tiers in some treatment categories.
 
-for TIER in Core BS Sing; do
+for TIER in Core Agg BS; do
   LOCI="${TIER}.Significant.Loci"
 
   # CA (col 14)
@@ -1865,10 +1865,10 @@ GENE_BED=~/CASE/analysis/sorted.ref3.0.gene.bed
 # ─── Pairwise and triple-treatment LOC lists per tier ────────────────────────
 # Grouped.Loci column indices: col 11 = Sig.CASE, col 12 = Sig.CA, col 13 = Sig.SE
 #                              col 14 = CHROM, col 15 = BP
-# Core tier will have the most populated combination sets; BS and Singleton
+# Core tier will have the most populated combination sets; Agg and BS
 # output may be empty in some categories, which is expected and interpretable.
 
-for TIER in Core BS Sing; do
+for TIER in Core Agg BS; do
   GLOCI="${TIER}.Significant.Grouped.Loci"
 
   # SE+CASE but not CA
@@ -1971,24 +1971,24 @@ png(filename = "TestGO.BS.png", type = "cairo", units = "px",
 pp.bs
 dev.off()
 
-# Singleton loci — single-block locus set
-gostres.sing <- gost(
+# Aggregate loci — per-block + all-blocks cross-validated locus set
+gostres.agg <- gost(
   query         = list(
-    "CASE" = read.table("Sig.loci.Sing.CASE.LOC", header = FALSE),
-    "SE"   = read.table("Sig.loci.Sing.SE.LOC",   header = FALSE),
-    "CA"   = read.table("Sig.loci.Sing.CA.LOC",   header = FALSE)
+    "CASE" = read.table("Sig.loci.Agg.CASE.LOC", header = FALSE),
+    "SE"   = read.table("Sig.loci.Agg.SE.LOC",   header = FALSE),
+    "CA"   = read.table("Sig.loci.Agg.CA.LOC",   header = FALSE)
   ),
   organism       = "cvgca002022765v4",
   multi_query    = FALSE,
   user_threshold = 0.05,
   domain_scope   = "known"
 )
-p.sing   <- gostplot(gostres.sing, capped = TRUE, interactive = FALSE)
-p.sing   <- p.sing + theme_black() + theme(legend.position = "none")
-pp.sing  <- publish_gostplot(p.sing, width = NA, height = NA, filename = NULL)
-png(filename = "TestGO.Sing.png", type = "cairo", units = "px",
+p.agg   <- gostplot(gostres.agg, capped = TRUE, interactive = FALSE)
+p.agg   <- p.agg + theme_black() + theme(legend.position = "none")
+pp.agg  <- publish_gostplot(p.agg, width = NA, height = NA, filename = NULL)
+png(filename = "TestGO.Agg.png", type = "cairo", units = "px",
     width = 4000, height = 2500, res = 300, bg = "transparent")
-pp.sing
+pp.agg
 dev.off()
 ```
 
@@ -2085,20 +2085,20 @@ awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_SE_cand_genes_GO.tab
 grep -F -f ../Sig.loci.BS.CASE.LOC     gene2go_full.tab > BS_CASE_cand_genes_GO.tab
 awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_CASE_cand_genes_GO.tab   > BS_CASE_cand_genes_GO_head.tab
 
-# --- Singleton loci (single-block only) ---
-# Note: these files may be empty if singleton loci map to no annotated genes;
+# --- Aggregate loci (per-block + all-blocks cross-validated) ---
+# Note: these files may be empty if aggregate loci map to no annotated genes;
 # downstream R code handles empty input gracefully via run_topGO_analysis().
-grep -F -f ../Sig.loci.Sing.TOTAL.LOC  gene2go_full.tab > Sing_ALL_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Sing_ALL_cand_genes_GO.tab  > Sing_ALL_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Agg.TOTAL.LOC  gene2go_full.tab > Agg_ALL_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Agg_ALL_cand_genes_GO.tab  > Agg_ALL_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.Sing.CA.LOC     gene2go_full.tab > Sing_CA_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Sing_CA_cand_genes_GO.tab   > Sing_CA_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Agg.CA.LOC     gene2go_full.tab > Agg_CA_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Agg_CA_cand_genes_GO.tab   > Agg_CA_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.Sing.SE.LOC     gene2go_full.tab > Sing_SE_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Sing_SE_cand_genes_GO.tab   > Sing_SE_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Agg.SE.LOC     gene2go_full.tab > Agg_SE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Agg_SE_cand_genes_GO.tab   > Agg_SE_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.Sing.CASE.LOC   gene2go_full.tab > Sing_CASE_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Sing_CASE_cand_genes_GO.tab > Sing_CASE_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Agg.CASE.LOC   gene2go_full.tab > Agg_CASE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Agg_CASE_cand_genes_GO.tab > Agg_CASE_cand_genes_GO_head.tab
 ```
 
 ### Load libraries and gene-to-GO data
@@ -2242,14 +2242,14 @@ GO_BS_SE   <- run_topGO_analysis("GO/BS_SE_cand_genes_GO_head.tab",   all_genes,
 GO_BS_CASE <- run_topGO_analysis("GO/BS_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Block-Specific: CASE")
 ```
 
-### Run GO enrichment for Singleton loci
+### Run GO enrichment for Aggregate loci
 
 ```{r}
-# Singleton loci: single-block only; may return NULL if too few annotated genes
-GO_Sing_ALL  <- run_topGO_analysis("GO/Sing_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Singleton: All Outliers")
-GO_Sing_CA   <- run_topGO_analysis("GO/Sing_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Singleton: CA")
-GO_Sing_SE   <- run_topGO_analysis("GO/Sing_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Singleton: SE")
-GO_Sing_CASE <- run_topGO_analysis("GO/Sing_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Singleton: CASE")
+# Aggregate loci: per-block + all-blocks cross-validated; may return NULL if too few annotated genes
+GO_Agg_ALL  <- run_topGO_analysis("GO/Agg_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Aggregate: All Outliers")
+GO_Agg_CA   <- run_topGO_analysis("GO/Agg_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Aggregate: CA")
+GO_Agg_SE   <- run_topGO_analysis("GO/Agg_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Aggregate: SE")
+GO_Agg_CASE <- run_topGO_analysis("GO/Agg_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Aggregate: CASE")
 ```
 
 ### Save results
@@ -2276,11 +2276,11 @@ if(!is.null(GO_BS_CA))   write.csv(GO_BS_CA,   "GO/BS_CA_GO_en_sig_gene.csv",   
 if(!is.null(GO_BS_SE))   write.csv(GO_BS_SE,   "GO/BS_SE_GO_en_sig_gene.csv",   row.names = FALSE)
 if(!is.null(GO_BS_CASE)) write.csv(GO_BS_CASE, "GO/BS_CASE_GO_en_sig_gene.csv", row.names = FALSE)
 
-# Singleton
-if(!is.null(GO_Sing_ALL))  write.csv(GO_Sing_ALL,  "GO/Sing_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
-if(!is.null(GO_Sing_CA))   write.csv(GO_Sing_CA,   "GO/Sing_CA_GO_en_sig_gene.csv",   row.names = FALSE)
-if(!is.null(GO_Sing_SE))   write.csv(GO_Sing_SE,   "GO/Sing_SE_GO_en_sig_gene.csv",   row.names = FALSE)
-if(!is.null(GO_Sing_CASE)) write.csv(GO_Sing_CASE, "GO/Sing_CASE_GO_en_sig_gene.csv", row.names = FALSE)
+# Aggregate
+if(!is.null(GO_Agg_ALL))  write.csv(GO_Agg_ALL,  "GO/Agg_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
+if(!is.null(GO_Agg_CA))   write.csv(GO_Agg_CA,   "GO/Agg_CA_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Agg_SE))   write.csv(GO_Agg_SE,   "GO/Agg_SE_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Agg_CASE)) write.csv(GO_Agg_CASE, "GO/Agg_CASE_GO_en_sig_gene.csv", row.names = FALSE)
 ```
 
 ### Plot GO enrichment for each stressor category
@@ -2379,21 +2379,21 @@ save_GO_plot(GO_BS_CA_plot,   "GO/GO_enrichment_BS_CA.png")
 save_GO_plot(GO_BS_SE_plot,   "GO/GO_enrichment_BS_SE.png")
 save_GO_plot(GO_BS_CASE_plot, "GO/GO_enrichment_BS_CASE.png")
 
-# --- Singleton loci ---
-GO_Sing_ALL_plot  <- plot_GO(GO_Sing_ALL,  "Singleton: All Outlier Loci")
-GO_Sing_CA_plot   <- plot_GO(GO_Sing_CA,   "Singleton: CA Stressor")
-GO_Sing_SE_plot   <- plot_GO(GO_Sing_SE,   "Singleton: SE Stressor")
-GO_Sing_CASE_plot <- plot_GO(GO_Sing_CASE, "Singleton: CASE Stressor (CA+SE)")
+# --- Aggregate loci ---
+GO_Agg_ALL_plot  <- plot_GO(GO_Agg_ALL,  "Aggregate: All Outlier Loci")
+GO_Agg_CA_plot   <- plot_GO(GO_Agg_CA,   "Aggregate: CA Stressor")
+GO_Agg_SE_plot   <- plot_GO(GO_Agg_SE,   "Aggregate: SE Stressor")
+GO_Agg_CASE_plot <- plot_GO(GO_Agg_CASE, "Aggregate: CASE Stressor (CA+SE)")
 
-if(!is.null(GO_Sing_ALL_plot))  print(GO_Sing_ALL_plot)
-if(!is.null(GO_Sing_CA_plot))   print(GO_Sing_CA_plot)
-if(!is.null(GO_Sing_SE_plot))   print(GO_Sing_SE_plot)
-if(!is.null(GO_Sing_CASE_plot)) print(GO_Sing_CASE_plot)
+if(!is.null(GO_Agg_ALL_plot))  print(GO_Agg_ALL_plot)
+if(!is.null(GO_Agg_CA_plot))   print(GO_Agg_CA_plot)
+if(!is.null(GO_Agg_SE_plot))   print(GO_Agg_SE_plot)
+if(!is.null(GO_Agg_CASE_plot)) print(GO_Agg_CASE_plot)
 
-save_GO_plot(GO_Sing_ALL_plot,  "GO/GO_enrichment_Sing_ALL.png")
-save_GO_plot(GO_Sing_CA_plot,   "GO/GO_enrichment_Sing_CA.png")
-save_GO_plot(GO_Sing_SE_plot,   "GO/GO_enrichment_Sing_SE.png")
-save_GO_plot(GO_Sing_CASE_plot, "GO/GO_enrichment_Sing_CASE.png")
+save_GO_plot(GO_Agg_ALL_plot,  "GO/GO_enrichment_Agg_ALL.png")
+save_GO_plot(GO_Agg_CA_plot,   "GO/GO_enrichment_Agg_CA.png")
+save_GO_plot(GO_Agg_SE_plot,   "GO/GO_enrichment_Agg_SE.png")
+save_GO_plot(GO_Agg_CASE_plot, "GO/GO_enrichment_Agg_CASE.png")
 ```
 
 ### Combined GO enrichment plot (all stressors)
@@ -2443,8 +2443,8 @@ if(nrow(GO_combined) > 0) {
 # Color palette for the three locus tiers (colorblind-friendly)
 tier_colors <- c(
   "Core"           = "#E69F00",   # amber  — high-confidence, multi-block
-  "Block-Specific" = "#009E73",   # teal   — significant in exactly one block
-  "Singleton"      = "#0072B2"    # blue   — single-locus singleton hits
+  "Aggregate"      = "#009E73",   # teal   — per-block + all-blocks cross-validated
+  "Block-Specific" = "#0072B2"    # blue   — single-block outliers (lowcov or lowvar)
 )
 
 # build_tier_highlights(): given the ggman data frame (dfm) for one block and
@@ -2456,16 +2456,16 @@ tier_colors <- c(
 #   block_num     — integer block ID (10, 11, or 12)
 #   treatment_col — string name of the significance column (e.g. "Sig.CASE")
 build_tier_highlights <- function(dfm, block_num, treatment_col) {
-  h.core <- core.sig      %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
-  h.bs   <- block.sig     %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
-  h.sing <- singleton.sig %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
+  h.core <- core.sig       %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
+  h.agg  <- aggregate.sig  %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
+  h.bs   <- block.specific %>% filter(BLOCK == block_num, .data[[treatment_col]] == TRUE)
 
   bind_rows(
     semi_join(dfm, h.core, by = "SNP") %>% mutate(Tier = "Core"),
-    semi_join(dfm, h.bs,   by = "SNP") %>% mutate(Tier = "Block-Specific"),
-    semi_join(dfm, h.sing, by = "SNP") %>% mutate(Tier = "Singleton")
+    semi_join(dfm, h.agg,  by = "SNP") %>% mutate(Tier = "Aggregate"),
+    semi_join(dfm, h.bs,   by = "SNP") %>% mutate(Tier = "Block-Specific")
   ) %>%
-    mutate(Tier = factor(Tier, levels = c("Core", "Block-Specific", "Singleton")))
+    mutate(Tier = factor(Tier, levels = c("Core", "Aggregate", "Block-Specific")))
 }
 ```
 
@@ -2478,7 +2478,7 @@ b10.c <- subset(B10.pv, QCON < 0.1)
 B10.pp <- B10.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b10.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -2492,7 +2492,7 @@ dfm <- man[[1]]
 
 dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
 
-# Highlight each block using tier-colored points (Core/Block-Specific/Singleton)
+# Highlight each block using tier-colored points (Core/Aggregate/Block-Specific)
 dfmo <- build_tier_highlights(dfm, block_num = 10, treatment_col = "Sig.CASE")
 
 dfmsplit <- split(dfm, dfm$chrom)
@@ -2524,7 +2524,7 @@ b11.c <- subset(B11.pv, QCON < 0.1)
 B11.pp <- B11.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b11.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -2572,7 +2572,7 @@ b12.c <- subset(B12.pv, QCON < 0.1)
 B12.pp <- B12.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b12.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -2706,7 +2706,7 @@ b10.c <- subset(B10.pv, QCON < 0.1)
 B10.pp <- B10.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b10.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -2752,7 +2752,7 @@ b11.c <- subset(B11.pv, QCON < 0.1)
 B11.pp <- B11.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b11.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -2799,7 +2799,7 @@ b12.c <- subset(B12.pv, QCON < 0.1)
 B12.pp <- B12.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b12.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -2936,7 +2936,7 @@ b10.c <- subset(B10.pv, QCON < 0.1)
 B10.pp <- B10.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b10.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -2982,7 +2982,7 @@ b11.c <- subset(B11.pv, QCON < 0.1)
 B11.pp <- B11.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b11.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -3029,7 +3029,7 @@ b12.c <- subset(B12.pv, QCON < 0.1)
 B12.pp <- B12.pv %>%
   mutate(
     Group = case_when(
-      SNP %in% singleton$SNP ~ "Singleton",
+      SNP %in% singleton$SNP ~ "Single-Block",
       SNP %in% b12.c$SNP ~ "Control Treatment Filtered",
       SNP %in% all_con$SNP ~ "Control Treatment Filtered",
       SNP %in% con_filter$SNP ~ "Control Treatment Filtered",
@@ -3515,15 +3515,15 @@ draw_tier_venn <- function(gdf, png_file, title = "") {
   invisible(vp)
 }
 
-# --- Core loci (Tiers A–C, multi-block) ---
-draw_tier_venn(grouped_core.sig, "VenCore.png",   "Core")
+# --- Core loci (multi-block, highest confidence) ---
+draw_tier_venn(grouped_core.sig, "VenCore.png", "Core")
 
-# --- Block-Specific loci ---
-draw_tier_venn(grouped_block.sig, "VenBS.png",    "Block-Specific")
+# --- Aggregate loci (per-block + all-blocks cross-validated) ---
+draw_tier_venn(grouped_aggregate.sig, "VenAgg.png", "Aggregate")
 
-# --- Singleton loci (single-block) ---
-# May produce zero-area circles for some stressors if no singletons pass that filter
-draw_tier_venn(grouped_singleton.sig, "VenSing.png", "Singleton")
+# --- Block-Specific loci (single-block outliers; bs_source tracks origin) ---
+# May produce zero-area circles for some stressors in sparse treatment categories
+draw_tier_venn(grouped_block.specific, "VenBS.png", "Block-Specific")
 ```
 
 # PCA
@@ -3910,12 +3910,12 @@ mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' BS.pca.filter CASE.All.Blocks.cov.sy
 mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' BS.pca.filter CASE.All.Blocks.sync \
   | cut --complement -f60- > BS.outlier.pca.block.sync
 
-# --- Singleton loci ---
-mawk '!/CHR/' Sing.Significant.Loci | cut -f2,3 | sort | uniq > Sing.pca.filter
-mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Sing.pca.filter CASE.All.Blocks.cov.sync \
-  | cut --complement -f60- > Sing.outlier.pca.sync
-mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Sing.pca.filter CASE.All.Blocks.sync \
-  | cut --complement -f60- > Sing.outlier.pca.block.sync
+# --- Aggregate loci ---
+mawk '!/CHR/' Agg.Significant.Loci | cut -f2,3 | sort | uniq > Agg.pca.filter
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Agg.pca.filter CASE.All.Blocks.cov.sync \
+  | cut --complement -f60- > Agg.outlier.pca.sync
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Agg.pca.filter CASE.All.Blocks.sync \
+  | cut --complement -f60- > Agg.outlier.pca.block.sync
 ```
 
 ### All-samples PCA helper function
@@ -3998,16 +3998,16 @@ run_tier_pca <- function(sync_file, tier_label, out_prefix) {
 ### Run all-samples PCA for each tier
 
 ```{r}
-# All three tiers run across all 56 samples; block-restrict BS/Singleton later
+# All three tiers run across all 56 samples; block-restrict Agg/BS later
 # if the all-block PCA is uninformative.
 pca.core <- run_tier_pca("Core.outlier.pca.sync",  "Core Loci",           "PC_Core")
+pca.agg  <- run_tier_pca("Agg.outlier.pca.sync",   "Aggregate Loci",      "PC_Agg")
 pca.bs   <- run_tier_pca("BS.outlier.pca.sync",    "Block-Specific Loci", "PC_BS")
-pca.sing <- run_tier_pca("Sing.outlier.pca.sync",  "Singleton Loci",      "PC_Sing")
 
 # Print in-line
 print(pca.core$p_treat)
+print(pca.agg$p_treat)
 print(pca.bs$p_treat)
-print(pca.sing$p_treat)
 ```
 
 ### Per-block PCA helper function
@@ -4021,7 +4021,7 @@ print(pca.sing$p_treat)
 #   sync_file   — path to the tier-filtered block-level .sync file
 #   tier_label  — human-readable label used in plot titles and file names
 #
-# Note: BS and Singleton may have very few loci in a given block; the function
+# Note: Agg and BS may have very few loci in a given block; the function
 # will warn and skip rather than error if < 2 variable loci remain.
 run_block_pca_tier <- function(sync_file, tier_label) {
   cat(paste0("\n=== Per-block PCA: ", tier_label, " ===\n"))
@@ -4103,7 +4103,7 @@ run_block_pca_tier <- function(sync_file, tier_label) {
 
 ```{r}
 run_block_pca_tier("Core.outlier.pca.block.sync", "Core")
+run_block_pca_tier("Agg.outlier.pca.block.sync",  "Aggregate")
 run_block_pca_tier("BS.outlier.pca.block.sync",   "Block-Specific")
-run_block_pca_tier("Sing.outlier.pca.block.sync", "Singleton")
 ```
 
