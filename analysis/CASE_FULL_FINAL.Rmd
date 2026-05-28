@@ -1287,15 +1287,7 @@ block.specific <- anti_join(
 write.table(block.specific, "Sig.Loci.Block-Specific", sep = "\t", row.names = FALSE, quote = FALSE)
 ```
 
-```{r}
-singleton       <- read.table("singleton.loci",         header = TRUE)
-sing.lowvar     <- read.table("singleton.loci.lowvar",   header = TRUE)
-sing.lowcov     <- read.table("singleton.loci.lowcov",   header = TRUE)
 
-ppsig1.s        <- semi_join(tierD_all, singleton,   by = "SNP")  # combined (for total.sig)
-ppsig1.s.lowvar <- semi_join(tierD_all, sing.lowvar, by = "SNP")
-ppsig1.s.lowcov <- semi_join(tierD_all, sing.lowcov, by = "SNP")
-```
 #### Old Way
 ```{r}
 Qvalue_convert(B10.pval.table) ->B10.pv
