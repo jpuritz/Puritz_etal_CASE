@@ -1057,8 +1057,15 @@ Qvalue_convert(AB.pval.table) -> AB.pv
 # alpha2 = CON q-value floor: SNPs must have QCON > alpha2 to exclude loci
 #          that are also differentiating in the control (likely artifacts or
 #          family effects rather than treatment-driven selection)
-# B11.alpha = doubled threshold for Block 11 throughout, reflecting lower
-#             statistical power in that block (intentional correction)
+#
+# Per-block alpha corrections (applied to Aggregate and Block-Specific tiers):
+#   B10.alpha = 0.001 — 10x stricter than base; B10 p-values are inflated by
+#               genetic drift from fewer spawning broodstock, so a tighter
+#               threshold is needed to prevent B10 from dominating non-core tiers.
+#   B11.alpha = 0.1   — 10x looser than base; B11 has lower coverage and fewer
+#               loci, so statistical power is reduced and the threshold is relaxed.
+#   Core tiers (Tier A/B) do not apply these corrections because requiring signal
+#   across multiple independent blocks already controls for block-specific drift.
 
 # ── Helper: apply_treatment_filter ───────────────────────────────────────────
 # After subsetting to SNPs significant for one treatment, zero out the Sig.*
@@ -1074,10 +1081,10 @@ apply_treatment_filter <- function(df, keep_treatment) {
 }
 
 # top5pct_filter: within the already-significant loci (df), retain only those
-# whose treatment q-value falls in the top 5% of that significant set.
-# The quantile is intentionally computed on df (the pre-filtered set), not the
-# full distribution — we want the strongest signals among loci that already
-# passed the FDR threshold, not genome-wide top 5%.
+# whose treatment q-value falls in the top 1% of that significant set.
+# Quantiles are computed only on loci with QCON > 0.1 so that CON-significant
+# loci with inflated treatment signal do not pull the threshold up against
+# genuinely treatment-specific outliers.
 top5pct_filter <- function(df) {
   df_con <- subset(df, QCON > 0.1)
   subset(df,
@@ -1180,10 +1187,12 @@ write.table(ppsig.B11.01,    "Sig.Loci.FDR01.Block11",  sep = "\t", row.names = 
 write.table(ppsig.B12.01,    "Sig.Loci.FDR01.Block12",  sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOCK-SPECIFIC TIER: q < 0.01 AND top 5% of q-values within the significant set
+# BLOCK-SPECIFIC TIER: block-specific alpha thresholds AND top 1% of q-values
 # ══════════════════════════════════════════════════════════════════════════════
-# top5pct_filter selects the strongest signals among already-significant loci.
-# Restricted to singletons (loci testable in only 1–2 blocks) via semi_join below.
+# top5pct_filter selects the top 1% strongest signals among already-significant
+# loci (quantile computed on CON-clean subset; QCON > 0.1).
+# Block alphas: B10 = 0.001 (drift correction), B11 = 0.1 (power correction),
+# B12 = 0.01 (base). Restricted to singletons via semi_join below.
 
 ppsig.B10 <- Significat_subset(B10.pv, B10.alpha,     alpha2) %>% top5pct_filter()
 ppsig.B11 <- Significat_subset(B11.pv, B11.alpha, alpha2) %>% top5pct_filter()
