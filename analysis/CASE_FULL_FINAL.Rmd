@@ -1056,7 +1056,7 @@ Qvalue_convert(AB.pval.table) -> AB.pv
 # alpha  = primary FDR threshold applied to treatment q-values (QCA, QCASE, QSE)
 # alpha2 = CON q-value floor: SNPs must have QCON > alpha2 to exclude loci
 #          that are also differentiating in the control (likely artifacts or
-#          maternal effects rather than treatment-driven selection)
+#          family effects rather than treatment-driven selection)
 # B11.alpha = doubled threshold for Block 11 throughout, reflecting lower
 #             statistical power in that block (intentional correction)
 
@@ -1079,10 +1079,11 @@ apply_treatment_filter <- function(df, keep_treatment) {
 # full distribution — we want the strongest signals among loci that already
 # passed the FDR threshold, not genome-wide top 5%.
 top5pct_filter <- function(df) {
+  df_con <- subset(df, QCON > 0.1)
   subset(df,
-    (Sig.CASE == TRUE & QCASE < quantile(df$QCASE, na.rm = TRUE, probs = 0.01)) |
-    (Sig.CA   == TRUE & QCA   < quantile(df$QCA,   na.rm = TRUE, probs = 0.01)) |
-    (Sig.SE   == TRUE & QSE   < quantile(df$QSE,   na.rm = TRUE, probs = 0.01))
+    (Sig.CASE == TRUE & QCASE < quantile(df_con$QCASE, na.rm = TRUE, probs = 0.01)) |
+    (Sig.CA   == TRUE & QCA   < quantile(df_con$QCA,   na.rm = TRUE, probs = 0.01)) |
+    (Sig.SE   == TRUE & QSE   < quantile(df_con$QSE,   na.rm = TRUE, probs = 0.01))
   )
 }
 
@@ -1095,10 +1096,10 @@ pp1 <- rbind(B10.pv, B11.pv, B12.pv)
 # ══════════════════════════════════════════════════════════════════════════════
 alpha  <- 0.10
 alpha2 <- 0.10
-B11.alpha <- alpha * 1  
+
 
 ppsig.B10.1 <- Significat_subset(B10.pv, alpha,     alpha2)
-ppsig.B11.1 <- Significat_subset(B11.pv, B11.alpha, alpha2)
+ppsig.B11.1 <- Significat_subset(B11.pv, alpha, alpha2)
 ppsig.B12.1 <- Significat_subset(B12.pv, alpha,     alpha2)
 
 ppsig.B10.1$BLOCK <- 10
@@ -1129,7 +1130,7 @@ write.table(all_sig, "Sig.Loci.3", sep = "\t", row.names = FALSE, quote = FALSE)
 # ══════════════════════════════════════════════════════════════════════════════
 alpha  <- 0.05
 alpha2 <- 0.10
-B11.alpha <- alpha * 2  # Block 11 correction: 0.10
+B11.alpha <- 0.1 # Block 11 correction: 0.10
 
 ppsig.B10.05 <- Significat_subset(B10.pv, alpha,     alpha2)
 ppsig.B11.05 <- Significat_subset(B11.pv, B11.alpha, alpha2)
@@ -1161,9 +1162,10 @@ write.table(multi_sig, "Sig.Loci.2", sep = "\t", row.names = FALSE, quote = FALS
 # ppsig3.FDR01 feeds BLOCK-SPECIFIC TIER and AGGREGATE TIER:
 alpha  <- 0.01
 alpha2 <- 0.10
-B11.alpha <- alpha * 2  # Block 11 correction: 0.02
+B11.alpha <- 0.1  # Block 11 correction: 0.1
+B10.alpha <- 0.001 # Block 10 correction: 0.001
 
-ppsig.B10.01 <- Significat_subset(B10.pv, alpha,     alpha2)
+ppsig.B10.01 <- Significat_subset(B10.pv, B10.alpha,     alpha2)
 ppsig.B11.01 <- Significat_subset(B11.pv, B11.alpha, alpha2)
 ppsig.B12.01 <- Significat_subset(B12.pv, alpha,     alpha2)
 
@@ -1183,7 +1185,7 @@ write.table(ppsig.B12.01,    "Sig.Loci.FDR01.Block12",  sep = "\t", row.names = 
 # top5pct_filter selects the strongest signals among already-significant loci.
 # Restricted to singletons (loci testable in only 1–2 blocks) via semi_join below.
 
-ppsig.B10 <- Significat_subset(B10.pv, alpha,     alpha2) %>% top5pct_filter()
+ppsig.B10 <- Significat_subset(B10.pv, B10.alpha,     alpha2) %>% top5pct_filter()
 ppsig.B11 <- Significat_subset(B11.pv, B11.alpha, alpha2) %>% top5pct_filter()
 ppsig.B12 <- Significat_subset(B12.pv, alpha,     alpha2) %>% top5pct_filter()
 
@@ -1195,10 +1197,10 @@ singleton   <- read.table("singleton.loci",         header = TRUE)
 sing.lowvar <- read.table("singleton.loci.lowvar",  header = TRUE)
 sing.lowcov <- read.table("singleton.loci.lowcov",  header = TRUE)
 
-tierD_all       <- rbind(ppsig.B10, ppsig.B11, ppsig.B12)
-ppsig1.s        <- semi_join(tierD_all, singleton,   by = "SNP")
-ppsig1.s.lowvar <- semi_join(tierD_all, sing.lowvar, by = "SNP")
-ppsig1.s.lowcov <- semi_join(tierD_all, sing.lowcov, by = "SNP")
+BS_all       <- rbind(ppsig.B10, ppsig.B11, ppsig.B12)
+ppsig1.s        <- semi_join(BS_all, singleton,   by = "SNP")
+ppsig1.s.lowvar <- semi_join(BS_all, sing.lowvar, by = "SNP")
+ppsig1.s.lowcov <- semi_join(BS_all, sing.lowcov, by = "SNP")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # AGGREGATE TIER: per-block q < 0.01 in ≥1 block AND q < 0.0001 in all-blocks (AB)
@@ -3556,6 +3558,7 @@ draw_tier_venn(grouped_block.specific, "VenBS.png", "Block-Specific")
 ```
 
 # PCA
+## All sample PCA of allele frequencies
 ```{bash, eval = FALSE}
 source activate CASE
 
@@ -3746,7 +3749,7 @@ for(stage in stages){
   cat("  saved:", outfile, "\n")
 }
 ```
-
+## PCA of allele frequency difference from intitial for all samples
 ```{r}
 
 # Base R approach for matrix named input.all.outlier.af
@@ -3844,73 +3847,7 @@ ggplot(pca_df, aes(x = PC1, y = PC2, fill = Treatments, shape = as.factor(Popula
   )
 
 ```
-```{r}
-library(ggplot2)
 
-af_t <- t(new_matrix)  # rows = samples
-
-meta <- data.frame(
-  Spawn = spawn.names,
-  Treatment = treatment.labels,
-  stringsAsFactors = FALSE
-)
-
-stopifnot(nrow(af_t) == nrow(meta))
-
-idx_by_spawn <- split(seq_len(nrow(af_t)), meta$Spawn)
-
-run_pca_and_plot_one_spawn <- function(idx, spawn_id) {
-  X <- af_t[idx, , drop = FALSE]
-  meta_spawn <- meta[idx, , drop = FALSE]
-
-  # Keep only numeric columns (in case something non-numeric slipped in)
-  X <- X[, vapply(as.data.frame(X), is.numeric, logical(1)), drop = FALSE]
-
-  # Drop columns that are all NA
-  keep_not_all_na <- colSums(!is.na(X)) > 0
-  X <- X[, keep_not_all_na, drop = FALSE]
-
-  # Drop zero-variance columns (within this spawn)
-  sds <- apply(X, 2, sd, na.rm = TRUE)
-  keep_var <- is.finite(sds) & sds > 0
-  X <- X[, keep_var, drop = FALSE]
-
-  if (ncol(X) < 2) {
-    stop(sprintf("Spawn %s: <2 variable columns remain after filtering; cannot run PCA.", spawn_id))
-  }
-
-  # PCA (now scaling is safe)
-  pca_res <- prcomp(X, center = TRUE, scale. = FALSE)
-
-  pca_df <- as.data.frame(pca_res$x)
-  pca_df$Treatment <- meta_spawn$Treatment
-  pca_df$Spawn <- spawn_id
-
-  var_explained <- (pca_res$sdev^2 / sum(pca_res$sdev^2)) * 100
-
-  ggplot(pca_df, aes(PC1, PC2, fill = Treatment)) +
-    geom_point(size = 8, color = "black", alpha = 0.5, shape = 21) +
-    scale_fill_manual(values = cbPaletteSmall[-4], name = "Treatment") +
-    theme_minimal() +
-    theme(axis.title.x = element_text(size = 24),
-          axis.title.y = element_text(size = 24)) +
-    labs(
-      x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
-      y = paste0("PC2 (", round(var_explained[2], 1), "%)"),
-      title = paste0("PCA of Allele Frequencies - ", spawn_id)
-    )
-}
-
-plots_by_spawn <- mapply(
-  FUN = run_pca_and_plot_one_spawn,
-  idx = idx_by_spawn,
-  spawn_id = names(idx_by_spawn),
-  SIMPLIFY = FALSE
-)
-
-lapply(plots_by_spawn, print)
-
-```
 
 ## Tier-specific PCA
 
@@ -4109,7 +4046,7 @@ run_block_pca_tier <- function(sync_file, tier_label) {
 
     p <- ggplot(pca_df, aes(x = PC1, y = PC2, fill = Treatment)) +
       geom_point(aes(alpha = 0.2), size = 6, shape = 21, color = "black") +
-      scale_fill_manual(values = cbPaletteSmall[-4], name = "Treatment") +
+      scale_fill_manual(values = cbPaletteSmall, name = "Treatment") +
       guides(alpha = "none") +
       theme_classic() +
       theme(axis.title.x = element_text(size = 14),
