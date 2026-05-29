@@ -2540,11 +2540,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 })
 b10.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_size_continuous(range = c(0.25,3)) +
   scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,50))+
@@ -2588,11 +2590,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b11.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_size_continuous(range = c(0.25,3)) +
   scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,8))+
@@ -2636,11 +2640,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b12.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
   labs(x = "Chromosome") +
@@ -2697,11 +2703,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b10.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   ggtitle("Block 10") +
   labs(x = "Chromosome") +
@@ -2745,11 +2753,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b11.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   labs(x = "Chromosome") +
   ggtitle("Block 11") +
@@ -2792,11 +2802,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b12.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,15))+ #Removes two singleton loci at end of CHR 5
   labs(x = "Chromosome") +
@@ -2854,11 +2866,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b10.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,32))+ #Limit manually set, removes 3 control filtered loci in CHR 2
   ggtitle("Block 10") +
@@ -2902,11 +2916,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b11.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   labs(x = "Chromosome") +
   ggtitle("Block 11") +
@@ -2949,11 +2965,13 @@ xbreaks <- sapply(dfmsplit,function(x) {
 
 b12.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
   geom_point(aes(alpha=marker, shape=Group, size = marker))+
-  geom_point(data=dfmo, aes(x=index, y=marker, fill=Tier, shape=Tier), size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Core"),           aes(x=index, y=marker, fill=Tier), shape=21, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Aggregate"),      aes(x=index, y=marker, fill=Tier), shape=23, size=3, color="black", alpha=0.9)+
+  geom_point(data=subset(dfmo, Tier=="Block-Specific"), aes(x=index, y=marker, fill=Tier), shape=25, size=3, color="black", alpha=0.9)+
   scale_fill_manual(values=tier_fill, name="Locus Tier") +
-  scale_shape_manual(values=tier_shape, name="Locus Tier") +
   scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour="none", alpha="none", size="none") +
+  guides(colour="none", alpha="none", size="none",
+         fill=guide_legend(override.aes=list(shape=c(21,23,25)))) +
   #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
   scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #removes two singleton loci near end of CHR 5
   labs(x = "Chromosome") +
