@@ -3768,10 +3768,10 @@ run_tier_pca <- function(sync_file, tier_label, out_prefix) {
   p_treat <- ggplot(pca_df, aes(x = PC1, y = PC2,
                                 fill = Treatments, shape = as.factor(Population))) +
     geom_point(size = 8, color = "black", alpha = 0.5) +
-    scale_fill_manual(values = cbPaletteSmall[-4], name = "Treatment") +
+    scale_fill_manual(values = cbPaletteSmall, name = "Treatment") +
     scale_shape_manual(values = c(21, 22, 23), name = "Spawn") +
     guides(fill  = guide_legend(override.aes = list(shape = 21)),
-           shape = guide_legend(override.aes = list(fill  = cbPaletteSmall[4]))) +
+           shape = guide_legend(override.aes = list(fill  = "grey50"))) +
     theme_minimal() +
     theme(axis.title.x = element_text(size = 24),
           axis.title.y = element_text(size = 24)) +
