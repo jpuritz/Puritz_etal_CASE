@@ -472,8 +472,8 @@ B12.loci <- B12.loci %>% mutate(BLOCK_12 = TRUE)
 
 # Full join all data frames to preserve all CHROM and BP combinations
 pos_df <- B10.loci %>%
-  full_join(B11.loci %>% select(CHROM, BP, BLOCK_11), by = c("CHROM", "BP")) %>%
-  full_join(B12.loci %>% select(CHROM, BP, BLOCK_12), by = c("CHROM", "BP"))
+  full_join(B11.loci %>% dplyr::select(CHROM, BP, BLOCK_11), by = c("CHROM", "BP")) %>%
+  full_join(B12.loci %>% dplyr::select(CHROM, BP, BLOCK_12), by = c("CHROM", "BP"))
 
 # Replace NA values in the BLOCK_* columns with FALSE
 pos_df <- pos_df %>%
@@ -744,19 +744,19 @@ tail -n +2 CON.B12.sync > CON.B12.input
 #### Modified CMH
 ```{r}
 ca.b10.sync <- read.sync(file="CA.B10.input", gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
-ca.b10.cov <- coverage(ca.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
+ca.b10.cov <- poolSeq::coverage(ca.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
 ca.b10.af <- af(ca.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
 
 case.b10.sync <- read.sync(file="CASE.B10.input", gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
-case.b10.cov <- coverage(case.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
+case.b10.cov <- poolSeq::coverage(case.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
 case.b10.af <- af(case.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
 
 se.b10.sync <- read.sync(file="SE.B10.input", gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
-se.b10.cov <- coverage(se.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
+se.b10.cov <- poolSeq::coverage(se.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
 se.b10.af <- af(se.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
 
 con.b10.sync <- read.sync(file="CON.B10.input", gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
-con.b10.cov <- coverage(con.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
+con.b10.cov <- poolSeq::coverage(con.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
 con.b10.af <- af(con.b10.sync,gen=c(0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3,3))
 ```
 
@@ -796,19 +796,19 @@ B10.pval.table$PVAL <- as.numeric(B10.pval.table$PVAL)
 
 ```{r}
 ca.b11.sync <- read.sync(file="CA.B11.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
-ca.b11.cov <- coverage(ca.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
+ca.b11.cov <- poolSeq::coverage(ca.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 ca.b11.af <- af(ca.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 
 case.b11.sync <- read.sync(file="CASE.B11.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
-case.b11.cov <- coverage(case.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
+case.b11.cov <- poolSeq::coverage(case.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 case.b11.af <- af(case.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 
 se.b11.sync <- read.sync(file="SE.B11.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
-se.b11.cov <- coverage(se.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
+se.b11.cov <- poolSeq::coverage(se.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 se.b11.af <- af(se.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 
 con.b11.sync <- read.sync(file="CON.B11.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
-con.b11.cov <- coverage(con.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
+con.b11.cov <- poolSeq::coverage(con.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 con.b11.af <- af(con.b11.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 ```
 
@@ -846,19 +846,19 @@ B11.pval.table$PVAL <- as.numeric(B11.pval.table$PVAL)
 
 ```{r}
 ca.b12.sync <- read.sync(file="CA.B12.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
-ca.b12.cov <- coverage(ca.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
+ca.b12.cov <- poolSeq::coverage(ca.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 ca.b12.af <- af(ca.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 
 case.b12.sync <- read.sync(file="CASE.B12.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
-case.b12.cov <- coverage(case.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
+case.b12.cov <- poolSeq::coverage(case.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 case.b12.af <- af(case.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 
 se.b12.sync <- read.sync(file="SE.B12.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
-se.b12.cov <- coverage(se.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
+se.b12.cov <- poolSeq::coverage(se.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 se.b12.af <- af(se.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 
 con.b12.sync <- read.sync(file="CON.B12.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
-con.b12.cov <- coverage(con.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
+con.b12.cov <- poolSeq::coverage(con.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 con.b12.af <- af(con.b12.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4 ))
 ```
 ```{r}
@@ -990,19 +990,19 @@ tail -n +2 SE.AB.sync | mawk '$2 != 67902213 && $2 != 19828063 && $2 != 93711267
 #### Calculate p-values
 ```{r}
 ca.ab.sync <- read.sync(file="CA.AB.input",gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3,3,4 ,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
-ca.ab.cov <- coverage(ca.ab.sync,gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+ca.ab.cov <- poolSeq::coverage(ca.ab.sync,gen=c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1),repl=c(1,1,2,2,3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 ca.ab.af <- af(ca.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 
 case.ab.sync <- read.sync(file="CASE.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
-case.ab.cov <- coverage(case.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+case.ab.cov <- poolSeq::coverage(case.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 case.ab.af <- af(case.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 
 se.ab.sync <- read.sync(file="SE.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
-se.ab.cov <- coverage(se.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+se.ab.cov <- poolSeq::coverage(se.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 se.ab.af <- af(se.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 
 con.ab.sync <- read.sync(file="CON.AB.input", gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
-con.ab.cov <- coverage(con.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
+con.ab.cov <- poolSeq::coverage(con.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 con.ab.af <- af(con.ab.sync,gen=c(0, 1, 0, 1, 0, 1, 0, 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1), repl=c(1, 1, 2, 2, 3, 3, 4 , 4,5,5,6,6,7,7,8,8,9,9,10,10,11,11 ))
 ```
 
@@ -2045,7 +2045,7 @@ END {print prev "\t" goids}
 
 ### Extract GO terms for candidate genes (by stressor category)
 
-```{bash, eval=FALSE}
+```{bash, eval=TRUE}
 cd ./GO
 
 # All outlier loci
@@ -2067,7 +2067,7 @@ awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' CASE_cand_genes_GO.tab 
 
 ### Extract GO terms for tier-specific candidate genes
 
-```{bash, eval=FALSE}
+```{bash, eval=TRUE}
 cd ./GO
 
 # --- Core loci (Tiers A–C, multi-block) ---
@@ -2296,7 +2296,7 @@ if(!is.null(GO_Agg_CASE)) write.csv(GO_Agg_CASE, "GO/Agg_CASE_GO_en_sig_gene.csv
 
 ### Plot GO enrichment for each stressor category
 
-```{r, fig.width=14, fig.height=10}
+```{r, fig.width=10, fig.height=14}
 plot_GO <- function(go_data, title_label) {
   if(is.null(go_data) || nrow(go_data) == 0) {
     cat(paste0("No significant GO terms to plot for ", title_label, "\n"))
@@ -2336,7 +2336,7 @@ if(!is.null(GO_CASE_plot)) print(GO_CASE_plot)
 ### Save GO enrichment plots
 
 ```{r}
-save_GO_plot <- function(plot, filename, height = 2000) {
+save_GO_plot <- function(plot, filename, height = 4000) {
   if(!is.null(plot)) {
     png(filename = filename,
         type = "cairo",
@@ -2357,7 +2357,7 @@ save_GO_plot(GO_CASE_plot, "GO/GO_enrichment_CASE.png")
 
 ### Plot and save tier-specific GO enrichment
 
-```{r, fig.width=14, fig.height=10}
+```{r, fig.width=10, fig.height=14}
 # --- Core loci ---
 GO_Core_ALL_plot  <- plot_GO(GO_Core_ALL,  "Core: All Outlier Loci")
 GO_Core_CA_plot   <- plot_GO(GO_Core_CA,   "Core: CA Stressor")
@@ -2501,7 +2501,7 @@ build_tier_highlights <- function(dfm, block_num, treatment_col, highlight_color
 ```
 
 #### CASE
-```{r, warning =FALSE, eval = FALSE}
+```{r, warning =FALSE, eval = TRUE}
 # Treatment color and tier tint palette for CASE Manhattan plots
 tier_fill <- make_tier_palette("#009E73")
 
@@ -2653,83 +2653,6 @@ png(filename="CASEmpHighlighted.png", type="cairo",units="px", width=5600, heigh
 (b10.CASE / b11.CASE /b12.CASE )  + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect') 
 
 null <- dev.off()
-```
-
-```{r}
-png(filename="CASEmpHighlightedBB.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
-
-
-
-(b10.CASE / b11.CASE /b12.CASE )  + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect') & theme_black()
-#(b10.CASE / b11.CASE /b12.CASE )  + plot_annotation(tag_levels = 'A') & theme_black()
-#man+scale_fill_manual(values = c("#009E73","#E69F00", "#0072B2"),name = "Legend")
-null <- dev.off()
-```
-
-```{r}
-png(filename="CASEmpHighlightedBB12.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
-
-b12.CASEbb <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker, show.legend = FALSE))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[4], aes(x=index, y=marker, shape=Group, size=8),  color = cbPaletteSmall4[4], alpha=0.9)+
-  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
-  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
-  scale_y_continuous(expand = c(0,0),limits=c(0,15))+ #Removes two singleton loci at end of CHR 5
-  labs(x = "Chromosome") +
-  theme_black()+
-  theme(legend.text = element_text(size = 18), legend.title = element_text(size=24), legend.position = "bottom")+ 
-  scale_size_continuous(range = c(0.5,5), limits= c(0,15)) +
-  ggtitle("Block 12") +
-  labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"))+
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
-  guides(shape = guide_legend(override.aes = list(color = "grey", size = 6, linetype =0) ) )
-#guides(color = guide_legend(override.aes = list(color = c("grey", "grey"))))
-b12.CASEbb
-null <- dev.off()
-```
-
-```{r}
-ball.h <- subset(total.sig, Sig.CASE == TRUE)
-ball.h <- ball.h %>%
-  group_by(SNP) %>%
-  slice_min(QCASE)
-
-man <-ggman(ball.h, pvalue="QCASE", chr="CHR", snp="SNP",bp="BP", relative.positions = TRUE ,sigLine = NA, pointSize=1.5,title = "", alpha = 0.5)
-
-dfm <- man[[1]]
-
-dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
-
-dfmo <- semi_join(dfm, b12.h, by = "SNP")
-dfmo$Group <- "Outlier"
-
-dfmsplit <- split(dfm, dfm$chrom)
-xbreaks <- sapply(dfmsplit,function(x) {
-    midpoint <- length(x$index)/2
-    if(midpoint <1) midpoint <- 1
-    return(x$index[midpoint])
-})
-
-ball.CASE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(data=dfm, fill=cbPaletteSmall4[4], aes(x=index, y=marker, size=marker),  color = cbPaletteSmall4[4])+
-  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
-  scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
-  #scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
-  labs(x = "Chromosome") +
-  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
-  scale_size_continuous(range = c(0.25,3), limits=c(0,20)) +
-  theme_classic()+
-  labs(y=expression(-Log10(q-value))) +
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
-
-png(filename="CASEmpBB.png", type="cairo",units="px", width=4800, height=1000, res=300, bg="transparent")  
-ball.CASE + theme_black()
-null <- dev.off()
-
 ```
 
 #### SE
@@ -2886,85 +2809,6 @@ png(filename="SEmpHighlighted.png", type="cairo",units="px", width=5600, height=
 null <- dev.off()
 ```
 
-```{r}
-png(filename="SEmpHighlightedBB.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
-
-b10.SE.b <- b10.SE +theme_black()
-b11.SE.b <- b11.SE +theme_black()
-b12.SE.b <- b12.SE +theme_black()
-
-(b10.SE.b / b11.SE.b /b12.SE.b )  + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect') & theme_black()
-#(b10.SE / b11.SE /b12.SE )  + plot_annotation(tag_levels = 'A') & theme_black()
-#man+scale_fill_manual(values = c("#009E73","#E69F00", "#0072B2"),name = "Legend")
-null <- dev.off()
-```
-
-```{r}
-png(filename="SEmpHighlightedBB12.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
-
-b12.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(aes(alpha=marker, shape=Group, size = marker, show.legend = FALSE))+  
-  geom_point(data=dfmo, fill=cbPaletteSmall4[3], aes(x=index, y=marker, shape=Group, size=8),  color = cbPaletteSmall4[3])+
-  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,15))+
-  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  #scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
-  scale_y_continuous(expand = c(0,0),limits=c(0,15))+ #Removes two singleton loci at end of CHR 5
-  labs(x = "Chromosome") +
-  theme_black()+
-  theme(legend.text = element_text(size = 18), legend.title = element_text(size=24), legend.position = "bottom")+ 
-  scale_size_continuous(range = c(0.5,5), limits= c(0,15)) +
-  ggtitle("Block 12") +
-  labs(y=expression(-Log10(q-value))) +
-  scale_shape_manual(values=c(15,21,16,17))+
-  scale_color_manual(values=c("grey", "dark grey"))+
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
-  guides(shape = guide_legend(override.aes = list(color = "grey", size = 6, linetype =0) ) )
-#guides(color = guide_legend(override.aes = list(color = c("grey", "grey"))))
-b12.SE
-null <- dev.off()
-```
-
-```{r}
-ball.h <- subset(total.sig, Sig.SE == TRUE)
-ball.h <- ball.h %>%
-  group_by(SNP) %>%
-  slice_min(QSE)
-
-man <-ggman(ball.h, pvalue="QSE", chr="CHR", snp="SNP",bp="BP", relative.positions = TRUE ,sigLine = NA, pointSize=1.5,title = "", alpha = 0.5)
-
-dfm <- man[[1]]
-
-dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
-
-dfmo <- semi_join(dfm, b12.h, by = "SNP")
-dfmo$Group <- "Outlier"
-
-dfmsplit <- split(dfm, dfm$chrom)
-xbreaks <- sapply(dfmsplit,function(x) {
-    midpoint <- length(x$index)/2
-    if(midpoint <1) midpoint <- 1
-    return(x$index[midpoint])
-})
-
-ball.SE <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(data=dfm, fill=cbPaletteSmall4[4], aes(x=index, y=marker, size=marker),  color = cbPaletteSmall4[3])+
-  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
-  scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
-  #scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
-  labs(x = "Chromosome") +
-  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
-  scale_size_continuous(range = c(0.25,3), limits=c(0,20)) +
-  theme_classic()+
-  labs(y=expression(-Log10(q-value))) +
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
-
-png(filename="SEmpBB.png", type="cairo",units="px", width=4800, height=1000, res=300, bg="transparent")  
-ball.SE + theme_black()
-null <- dev.off()
-
-```
-
 #### CA
 ```{r, warning =FALSE, eval = FALSE}
 # Treatment color and tier tint palette for CA Manhattan plots
@@ -3117,60 +2961,6 @@ png(filename="CAmpHighlighted.png", type="cairo",units="px", width=5600, height=
 null <- dev.off()
 ```
 
-```{r}
-png(filename="CAmpHighlightedBB.png", type="cairo",units="px", width=5600, height=3000, res=300, bg="transparent")
-
-b10.CA.b <- b10.CA +theme_black()
-b11.CA.b <- b11.CA +theme_black()
-b12.CA.b <- b12.CA +theme_black()
-
-(b10.CA.b / b11.CA.b /b12.CA.b )  + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect') & theme_black()
-#(b10.SE / b11.SE /b12.SE )  + plot_annotation(tag_levels = 'A') & theme_black()
-#man+scale_fill_manual(values = c("#009E73","#E69F00", "#0072B2"),name = "Legend")
-null <- dev.off()
-```
-
-
-```{r}
-ball.h <- subset(total.sig, Sig.CA == TRUE)
-ball.h <- ball.h %>%
-  group_by(SNP) %>%
-  slice_min(QCA)
-
-man <-ggman(ball.h, pvalue="QSE", chr="CHR", snp="SNP",bp="BP", relative.positions = TRUE ,sigLine = NA, pointSize=1.5,title = "", alpha = 0.5)
-
-dfm <- man[[1]]
-
-dfm$chrom_alt <- factor(dfm$chrom_alt, levels=c(0,1))
-
-dfmo <- semi_join(dfm, b12.h, by = "SNP")
-dfmo$Group <- "Outlier"
-
-dfmsplit <- split(dfm, dfm$chrom)
-xbreaks <- sapply(dfmsplit,function(x) {
-    midpoint <- length(x$index)/2
-    if(midpoint <1) midpoint <- 1
-    return(x$index[midpoint])
-})
-
-ball.CA <-ggplot(dfm, aes(x= index, y=marker, colour = as.factor(chrom_alt)))+
-  geom_point(data=dfm, fill=cbPaletteSmall4[4], aes(x=index, y=marker, size=marker),  color = cbPaletteSmall4[2])+
-  scale_x_continuous(breaks = xbreaks, labels = names(xbreaks),expand = c(0,0),limits = c(0,max(dfm$index)+10)) +
-  guides(colour = FALSE,alpha=FALSE, fill = FALSE, size=FALSE) +
-  scale_y_continuous(expand = c(0,0),limits=c(0,max(dfm$marker+1,na.rm=TRUE)))+
-  #scale_y_continuous(expand = c(0,0),limits=c(0,20))+ #Removes two outliers near end of CHR5
-  labs(x = "Chromosome") +
-  scale_alpha_continuous(range=c(0.05,0.8), limits= c(0,20))+
-  scale_size_continuous(range = c(0.25,3), limits=c(0,20)) +
-  theme_classic()+
-  labs(y=expression(-Log10(q-value))) +
-  scale_color_manual(values=c("grey", "dark grey"), guide =FALSE) 
-
-png(filename="CAmpBB.png", type="cairo",units="px", width=4800, height=1000, res=300, bg="transparent")  
-ball.CA + theme_black()
-null <- dev.off()
-
-```
 
 # Venn Diagrams
 ```{r}
