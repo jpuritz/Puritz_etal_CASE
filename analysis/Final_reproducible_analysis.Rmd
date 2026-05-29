@@ -3766,16 +3766,32 @@ run_tier_pca <- function(sync_file, tier_label, out_prefix) {
   )
 
   p_treat <- ggplot(pca_df, aes(x = PC1, y = PC2,
-                                color = Treatments, fill = Treatments)) +
-    geom_point(aes(alpha = 0.2), size = 10, shape = 21, col = "black") +
-    scale_fill_manual(values = cbPaletteSmall, name = "Treatment") +
-    base_theme
+                                fill = Treatments, shape = as.factor(Population))) +
+    geom_point(size = 8, color = "black", alpha = 0.5) +
+    scale_fill_manual(values = cbPaletteSmall[-4], name = "Treatment") +
+    scale_shape_manual(values = c(21, 22, 23), name = "Spawn") +
+    guides(fill  = guide_legend(override.aes = list(shape = 21)),
+           shape = guide_legend(override.aes = list(fill  = cbPaletteSmall[4]))) +
+    theme_minimal() +
+    theme(axis.title.x = element_text(size = 24),
+          axis.title.y = element_text(size = 24)) +
+    labs(x     = paste0("PC1 (", round(var_exp[1], 1), "%)"),
+         y     = paste0("PC2 (", round(var_exp[2], 1), "%)"),
+         title = paste0("PCA — ", tier_label))
 
   p_spawn <- ggplot(pca_df, aes(x = PC1, y = PC2,
-                                color = Population, fill = Population)) +
-    geom_point(aes(alpha = 0.2), size = 10, shape = 21, col = "black") +
-    scale_fill_manual(values = cbPaletteSmall, name = "Spawn") +
-    base_theme
+                                fill = as.factor(Population), shape = as.factor(Population))) +
+    geom_point(size = 8, color = "black", alpha = 0.5) +
+    scale_fill_manual(values = cbPaletteSmall[-4], name = "Spawn") +
+    scale_shape_manual(values = c(21, 22, 23), name = "Spawn") +
+    guides(fill  = guide_legend(override.aes = list(shape = 21)),
+           shape = guide_legend(override.aes = list(fill  = cbPaletteSmall[4]))) +
+    theme_minimal() +
+    theme(axis.title.x = element_text(size = 24),
+          axis.title.y = element_text(size = 24)) +
+    labs(x     = paste0("PC1 (", round(var_exp[1], 1), "%)"),
+         y     = paste0("PC2 (", round(var_exp[2], 1), "%)"),
+         title = paste0("PCA — ", tier_label))
 
   png(paste0(out_prefix, "_treat.png"), type = "cairo", units = "px",
       width = 5400, height = 3000, res = 300, bg = "transparent")
