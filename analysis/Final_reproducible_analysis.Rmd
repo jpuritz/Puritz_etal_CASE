@@ -3767,19 +3767,20 @@ run_tier_pca <- function(sync_file, tier_label, out_prefix) {
 
   p_treat <- ggplot(pca_df, aes(x = PC1, y = PC2,
                                 fill = Treatments, shape = as.factor(Population))) +
-    geom_point(aes(alpha = 0.2), size = 10, color = "black") +
+    geom_point(size = 10, color = "black", alpha = 0.5) +
     scale_fill_manual(values = cbPaletteSmall, name = "Treatment") +
     scale_shape_manual(values = c(21, 22, 23), name = "Spawn") +
-    guides(alpha = "none",
-           shape = guide_legend(override.aes = list(fill = "grey50"))) +
+    guides(fill  = guide_legend(override.aes = list(shape = 21)),
+           shape = guide_legend(override.aes = list(fill = cbPaletteSmall[4]))) +
     base_theme
 
   p_spawn <- ggplot(pca_df, aes(x = PC1, y = PC2,
                                 fill = as.factor(Population), shape = as.factor(Population))) +
-    geom_point(aes(alpha = 0.2), size = 10, color = "black") +
+    geom_point(size = 10, color = "black", alpha = 0.5) +
     scale_fill_manual(values = cbPaletteSmall, name = "Spawn") +
     scale_shape_manual(values = c(21, 22, 23), name = "Spawn") +
-    guides(alpha = "none") +
+    guides(fill  = guide_legend(override.aes = list(shape = 21, alpha = 1)),
+           shape = "none") +
     base_theme
 
   png(paste0(out_prefix, "_treat.png"), type = "cairo", units = "px",
