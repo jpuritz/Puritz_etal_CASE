@@ -3908,3 +3908,235 @@ run_block_pca_tier("Agg.outlier.pca.block.sync",  "Aggregate")
 run_block_pca_tier("BS.outlier.pca.block.sync",   "Block-Specific")
 ```
 
+
+# Recommended Summary Figures (GO synthesis)
+
+These chunks build the three figures recommended in `GO/GO_analysis_report.md`.
+They reuse the in-memory `GO_*` data frames created by the topGO section
+(`GO_CA`, `GO_SE`, `GO_CASE`, and the tier objects `GO_Core_*`, `GO_BS_*`,
+`GO_Agg_*`) and the `grouped_total.sig` locus table built for the Venn section,
+so run those sections first. Palette `cbPaletteSmall3` (CA = orange,
+SE = blue, CASE = green) is shared with `Ven.png` for visual consistency.
+
+Each `GO_*` data frame is gene × GO-term long format; a GO term repeats once
+per candidate gene that carries it. The helper below collapses to one row per
+GO term, keeping the strongest (smallest) Fisher p-value — the biologically
+meaningful unit for counting and plotting "enriched terms."
+
+```{r go-fig-helpers}
+library(ggplot2)
+library(dplyr)
+
+# Collapse gene x term -> unique GO terms (best Fisher per term).
+dedupe_go <- function(df) {
+  if (is.null(df) || nrow(df) == 0) return(NULL)
+  df %>%
+    arrange(Fisher) %>%
+    distinct(GeneOntologyIDs, .keep_all = TRUE)
+}
+
+# Vector of unique GO IDs for a treatment's GO data frame.
+go_ids <- function(df) {
+  d <- dedupe_go(df)
+  if (is.null(d)) character(0) else unique(d$GeneOntologyIDs)
+}
+
+# Canonical ordering used across the summary figures.
+onto_levels  <- c("Biological Processes", "Cellular Components", "Molecular Functions")
+treat_levels <- c("CA", "SE", "CASE")
+```
+
+## Figure 1 — GO-term Venn (CA / SE / CASE)
+
+Mirrors the locus-level `Ven.png` at the level of *enriched GO terms*. Built on
+the Total outlier set (`GO_CA`, `GO_SE`, `GO_CASE`). Numbers print to the
+console so they can be quoted in the text.
+
+```{r go-term-venn, fig.width=7, fig.height=7}
+library(VennDiagram)
+
+set_CA   <- go_ids(GO_CA)
+set_SE   <- go_ids(GO_SE)
+set_CASE <- go_ids(GO_CASE)
+
+# draw.triple.venn expects TOTAL (not exclusive) pairwise/triple overlaps.
+n1   <- length(set_CA);   n2 <- length(set_SE);   n3 <- length(set_CASE)
+n12  <- length(intersect(set_CA,   set_SE))
+n13  <- length(intersect(set_CA,   set_CASE))
+n23  <- length(intersect(set_SE,   set_CASE))
+n123 <- length(Reduce(intersect, list(set_CA, set_SE, set_CASE)))
+
+cat(sprintf(
+  "GO-term Venn  CA=%d SE=%d CASE=%d | CA&SE=%d CA&CASE=%d SE&CASE=%d all3=%d\n",
+  n1, n2, n3, n12, n13, n23, n123))
+cat(sprintf(
+  "  exclusive   CA-only=%d SE-only=%d CASE-only=%d\n",
+  n1 - n12 - n13 + n123,
+  n2 - n12 - n23 + n123,
+  n3 - n13 - n23 + n123))
+
+png(filename = "GO/GO_term_Venn.png", type = "cairo", units = "px",
+    width = 3000, height = 3000, res = 200, bg = "transparent")
+venn.plot <- draw.triple.venn(
+  area1 = n1, area2 = n2, area3 = n3,
+  n12 = n12, n13 = n13, n23 = n23, n123 = n123,
+  category = c("CA", "SE", "CASE"),
+  fill = cbPaletteSmall3, col = cbPaletteSmall3,
+  cat.col = cbPaletteSmall3, cat.cex = rep(4, 3),
+  cex = 4, label.col = rep("white", 7), margin = 0.08)
+grid.draw(venn.plot)
+dev.off()
+grid.newpage(); grid.draw(venn.plot)
+```
+
+## Figure 2 — Curated top-N GO enrichment dot plot
+
+Replaces the unreadable full-term plots. For each treatment, keeps the top
+`top_n` terms per ontology (by Fisher), then facets ontology (rows) ×
+treatment (columns). Terms are ordered within each ontology by enrichment.
+Built on the **Core** tier for the main figure (most defensible: replicated
+across blocks); swap in the Total or other tier objects for supplements.
+
+```{r curated-go-dotplot, fig.width=14, fig.height=12}
+# tidytext-free: wrap labels and order terms by peak enrichment.
+curated_go_dotplot <- function(go_list, top_n = 10, title_label = "") {
+  dat <- bind_rows(lapply(names(go_list), function(tr) {
+    d <- dedupe_go(go_list[[tr]])
+    if (is.null(d)) return(NULL)
+    d %>%
+      group_by(ontology) %>%
+      slice_min(order_by = Fisher, n = top_n, with_ties = FALSE) %>%
+      ungroup() %>%
+      mutate(treatment = tr)
+  }))
+  if (is.null(dat) || nrow(dat) == 0) {
+    cat(paste0("No terms to plot for ", title_label, "\n")); return(NULL)
+  }
+
+  dat$ontology  <- factor(dat$ontology,  levels = onto_levels)
+  dat$treatment <- factor(dat$treatment, levels = treat_levels)
+  dat$Term  <- stringr::str_wrap(dat$Term, width = 45)
+  ord <- dat %>% group_by(Term) %>%
+    summarise(e = max(-log10(Fisher)), .groups = "drop") %>% arrange(e)
+  dat$Term <- factor(dat$Term, levels = ord$Term)
+
+  ggplot(dat, aes(x = Term, y = -log10(Fisher),
+                  size = prop.sig.genes, fill = -log10(Fisher))) +
+    geom_hline(yintercept = -log10(0.05), linetype = "dotted",  linewidth = .4) +
+    geom_hline(yintercept = -log10(0.01), linetype = "longdash", linewidth = .5) +
+    geom_point(shape = 21, colour = "grey20") +
+    scale_size(range = c(2, 10), name = "Prop. sig. genes") +
+    scale_fill_continuous(low = "#1AD3D1FF", high = "#4686FBFF",
+                          name = expression(-log[10]~Fisher)) +
+    facet_grid(ontology ~ treatment, scales = "free_y", space = "free_y") +
+    coord_flip() +
+    labs(x = NULL, y = expression(-log[10]~(Fisher~italic(p))), title = title_label) +
+    theme_bw(base_size = 12) +
+    theme(strip.text.y = element_text(angle = 0),
+          panel.grid.minor = element_blank())
+}
+
+GO_core_curated <- curated_go_dotplot(
+  list(CA = GO_Core_CA, SE = GO_Core_SE, CASE = GO_Core_CASE),
+  top_n = 10, title_label = "Core-tier GO enrichment (top 10 per ontology)")
+
+if (!is.null(GO_core_curated)) {
+  print(GO_core_curated)
+  ggsave("GO/GO_enrichment_curated_Core.png", GO_core_curated,
+         width = 14, height = 12, dpi = 300, bg = "transparent")
+}
+
+# Optional Total-tier version for the supplement.
+GO_total_curated <- curated_go_dotplot(
+  list(CA = GO_CA, SE = GO_SE, CASE = GO_CASE),
+  top_n = 10, title_label = "All-outlier GO enrichment (top 10 per ontology)")
+if (!is.null(GO_total_curated)) {
+  ggsave("GO/GO_enrichment_curated_Total.png", GO_total_curated,
+         width = 14, height = 12, dpi = 300, bg = "transparent")
+}
+```
+
+## Figure 3 — Biological-theme heatmap (theme × treatment, and × tier)
+
+Counts unique enriched GO terms whose names match curated theme keywords.
+A term may match more than one theme (e.g., a "calcium ... mitochondrion"
+term hits both ion and mitochondria themes); counts are therefore overlapping
+summaries, not a partition. This is the figure that conveys the *interpretation*
+— cilia/translation/mitochondria rising into CASE while proteostasis stays flat.
+
+```{r theme-heatmap, fig.width=9, fig.height=6}
+library(tidyr)
+
+themes <- list(
+  "Cilium / microtubule motility" = c("cilium","cilia","dynein","microtubule",
+      "flagell","axonem","motile","myosin","actin","motor activity","motility"),
+  "Ion transport / acid-base"     = c("proton","sodium","potassium","calcium",
+      "ion transport","ion homeostasis","atpase","bicarbonate"),
+  "Translation / ribosome"        = c("translat","ribosom","rrna","eif",
+      "polysome","trna"),
+  "Mitochondria / oxidative"      = c("mitochond","oxidative","respiratory",
+      "electron transport","cytochrome"),
+  "Ubiquitin-proteasome"          = c("ubiquitin","proteasom","erad",
+      "catabolic process"),
+  "Protein folding / chaperone"   = c("fold","chaperone","unfolded",
+      "heat shock","hsp","prefoldin","chaperonin"),
+  "Apoptosis / stress response"   = c("apopto","stress","death","autophag"),
+  "DNA repair / replication"      = c("dna repair","dna replicat","damage",
+      "recombinat","nucleotide excision")
+)
+theme_levels <- names(themes)
+
+# Count unique GO terms matching each theme in one GO data frame.
+theme_counts <- function(df) {
+  d <- dedupe_go(df)
+  if (is.null(d)) return(setNames(rep(0L, length(themes)), theme_levels))
+  term_l <- tolower(d$Term)
+  vapply(themes, function(kws) sum(Reduce(`|`, lapply(kws, grepl, term_l))),
+         integer(1))
+}
+
+# ---- 3a: theme x treatment (Total outlier set) ----
+mat_treat <- sapply(list(CA = GO_CA, SE = GO_SE, CASE = GO_CASE), theme_counts)
+df_treat <- as.data.frame(mat_treat) %>%
+  mutate(theme = theme_levels) %>%
+  pivot_longer(-theme, names_to = "treatment", values_to = "n")
+df_treat$theme     <- factor(df_treat$theme, levels = rev(theme_levels))
+df_treat$treatment <- factor(df_treat$treatment, levels = treat_levels)
+
+p_theme_treat <- ggplot(df_treat, aes(treatment, theme, fill = n)) +
+  geom_tile(colour = "white", linewidth = 1) +
+  geom_text(aes(label = n), colour = "grey10", size = 4.5) +
+  scale_fill_gradient(low = "#EAF6F6", high = "#2B7DE9", name = "Enriched\nGO terms") +
+  labs(x = NULL, y = NULL,
+       title = "Enriched GO terms by biological theme and stressor") +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid = element_blank(), axis.text.y = element_text(hjust = 1))
+
+print(p_theme_treat)
+ggsave("GO/GO_theme_heatmap_treatment.png", p_theme_treat,
+       width = 9, height = 6, dpi = 300, bg = "transparent")
+
+# ---- 3b: theme x tier, for the CASE treatment ----
+case_by_tier <- list(Core = GO_Core_CASE, Aggregate = GO_Agg_CASE,
+                     "Block-Specific" = GO_BS_CASE)
+mat_tier <- sapply(case_by_tier, theme_counts)
+df_tier <- as.data.frame(mat_tier) %>%
+  mutate(theme = theme_levels) %>%
+  pivot_longer(-theme, names_to = "tier", values_to = "n")
+df_tier$theme <- factor(df_tier$theme, levels = rev(theme_levels))
+df_tier$tier  <- factor(df_tier$tier,
+                        levels = c("Core", "Aggregate", "Block-Specific"))
+
+p_theme_tier <- ggplot(df_tier, aes(tier, theme, fill = n)) +
+  geom_tile(colour = "white", linewidth = 1) +
+  geom_text(aes(label = n), colour = "grey10", size = 4.5) +
+  scale_fill_gradient(low = "#FBF0E7", high = "#E69F00", name = "Enriched\nGO terms") +
+  labs(x = NULL, y = NULL, title = "CASE: enriched GO terms by theme and locus tier") +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid = element_blank(), axis.text.y = element_text(hjust = 1))
+
+print(p_theme_tier)
+ggsave("GO/GO_theme_heatmap_CASE_by_tier.png", p_theme_tier,
+       width = 8, height = 6, dpi = 300, bg = "transparent")
+```
+
