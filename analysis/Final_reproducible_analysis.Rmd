@@ -22,7 +22,7 @@ library(VennDiagram)
 library(scales)
 library(data.table)
 library(patchwork)
-
+library(ggrain)
 
 # Custom theme for black background figures
 theme_black = function(base_size = 16, base_family = "") {
@@ -136,8 +136,8 @@ group_and_average <- function(df) {
                             ~ if (all(is.na(.))) NA else min(., na.rm = TRUE)),
                      Sig.CASE = any(Sig.CASE, na.rm = TRUE),
                      Sig.CA = any(Sig.CA, na.rm = TRUE),Sig.SE = any(Sig.SE, na.rm = TRUE),
-                     CHROM = first(CHROM), BP = first(BP), .groups = "drop") }
-
+                     CHROM = first(CHROM), BP = first(BP), .groups = "drop") 
+}
 
 cbPaletteSmall <- c("#E69F00", "#009E73", "#999999","sky blue","#0072B2")
 cbPaletteSmall4 <- c("#999999","#E69F00", "#0072B2", "#009E73")
@@ -159,7 +159,243 @@ git clone https://github.com/ToBoDev/assessPool.git
 mamba env create --file ../CASE_environment.yaml
 mamba env create --file ../random_draw_environment.yaml
 ```
-# Filtering
+
+# Phenotypic Results
+## Survival
+```{r}
+cbPalette <- c("#0072B2", "#56B4E9", "#D55E00","#E69F00", "#009E73","#999999","#F0E442" , "#CC79A7")
+cbPaletteSmall5 <- c("#999999","#E69F00", "#0072B2", "#009E73")
+final_data <- read.table("../data/CASE_FINAL_Mortality.txt", sep="\t", header=TRUE)
+
+final_data$Treatment <-factor(final_data$Treatment,levels=c("CON","CA","SE","CASE"))
+
+final_data_end <- subset(final_data, final_data$Time > 12)
+
+final_data_end <- final_data_end %>%
+  group_by(Block) %>%
+  mutate(Survival_centered = Survival - mean(Survival)) %>%
+  ungroup()
+
+final_data_end %>%
+  group_by(Treatment) %>%
+  summarise_at(vars(Survival_centered), list(~ mean(., na.rm=TRUE)))
+
+j1 <- ggplot(final_data_end, aes(x=Treatment,y=Survival_centered, fill=Treatment, color=Treatment)) +
+  geom_boxplot(notch = FALSE, outlier.colour=NA, alpha = 0.75, color="black",width=0.25) +
+  stat_summary(fun=mean, geom="point", shape=15, size=2, fill="black") +
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=2, alpha =0.8, binwidth = 0.5, stackratio =1,position = "identity" ) +
+  scale_fill_manual(values=cbPaletteSmall5)+
+  scale_color_manual(values=cbPaletteSmall5)+
+  theme_classic() +
+  #theme_black()+
+  theme(text = element_text(size=20)) +
+  theme(legend.position = c(0.9, 0.8)) +
+  ylab("Percent Survival") +
+  guides(color = FALSE, size = FALSE, fill=FALSE)
+
+png(filename="../results/CASECentered.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")
+j1
+dev.off()
+
+fit <- aov(Survival_centered ~Treatment, data=final_data_end)
+
+summary(fit)
+
+TukeyHSD(fit, "Treatment")
+
+## Block Specific
+# Find the range of your Survival variable across all data
+full_range <- diff(range(final_data_end$Survival))
+# Calculate an appropriate binwidth based on this range
+appropriate_binwidth <- full_range / 30  # Adjust divisor as needed
+
+j6 <- ggplot(filter(final_data_end,Block ==6), aes(x=Treatment,y=Survival, fill=Treatment, color=Treatment)) +
+  geom_boxplot(notch = FALSE, outlier.colour=NA, alpha = 0.75, color="black",width=0.25) +
+  stat_summary(fun=mean, geom="point", shape=15, size=3, fill="black") +
+  geom_jitter(width = 0.05, height = 0, size = 2, alpha = 0.8) +
+  scale_fill_manual(values=cbPaletteSmall5)+
+  scale_color_manual(values=cbPaletteSmall5)+
+  theme_classic() +
+  #theme_black()+
+  theme(text = element_text(size=20)) +
+  theme(legend.position = c(0.9, 0.8)) +
+  ylab("Percent Survival") +
+  guides(color = FALSE, size = FALSE, fill=FALSE)
+
+
+png(filename="../results/CASEB6.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")
+j6
+dev.off()
+
+j10 <- ggplot(filter(final_data_end,Block ==10), aes(x=Treatment,y=Survival, fill=Treatment, color=Treatment)) +
+  geom_boxplot(notch = FALSE, outlier.colour=NA, alpha = 0.75, color="black",width=0.25) +
+  stat_summary(fun=mean, geom="point", shape=15, size=3, fill="black") +
+  geom_jitter(width = 0.05, height = 0, size = 2, alpha = 0.8) +
+  scale_fill_manual(values=cbPaletteSmall5)+
+  scale_color_manual(values=cbPaletteSmall5)+
+  theme_classic() +
+  #theme_black()+
+  theme(text = element_text(size=20)) +
+  theme(legend.position = c(0.9, 0.8)) +
+  ylab("Percent Survival") +
+  guides(color = FALSE, size = FALSE, fill=FALSE)
+
+
+
+png(filename="../results/CASEB10.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")
+j10
+dev.off()
+
+j11 <- ggplot(filter(final_data_end,Block ==11), aes(x=Treatment,y=Survival, fill=Treatment, color=Treatment)) +
+  geom_boxplot(notch = FALSE, outlier.colour=NA, alpha = 0.75, color="black",width=0.25) +
+  stat_summary(fun=mean, geom="point", shape=15, size=3, fill="black") +
+  geom_jitter(width = 0.05, height = 0, size = 2, alpha = 0.8) +
+  scale_fill_manual(values=cbPaletteSmall5)+
+  scale_color_manual(values=cbPaletteSmall5)+
+  theme_classic() +
+  #theme_black()+
+  theme(text = element_text(size=20)) +
+  theme(legend.position = c(0.9, 0.8)) +
+  ylab("Percent Survival") +
+  guides(color = FALSE, size = FALSE, fill=FALSE)
+
+
+png(filename="../results/CASEB11.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")
+j11
+dev.off()
+
+j12 <- ggplot(filter(final_data_end,Block ==12), aes(x=Treatment,y=Survival, fill=Treatment, color=Treatment)) +
+  geom_boxplot(notch = FALSE, outlier.colour=NA, alpha = 0.75, color="black",width=0.25) +
+  stat_summary(fun=mean, geom="point", shape=15, size=3, fill="black") +
+  #geom_dotplot(binaxis='y', method= "histodot",stackdir='center', dotsize=0.5, alpha =0.8, binwidth = 1, stackratio =1,position = "identity",  binpositions = "all"  ) +
+  geom_jitter(width = 0.05, height = 0, size = 2, alpha = 0.8) +
+  scale_fill_manual(values=cbPaletteSmall5)+
+  scale_color_manual(values=cbPaletteSmall5)+
+  theme_classic() +
+  #theme_black()+
+  theme(text = element_text(size=20)) +
+  theme(legend.position = c(0.9, 0.8)) +
+  ylab("Percent Survival") +
+  guides(color = FALSE, size = FALSE, fill=FALSE)
+
+
+png(filename="../results/CASEB12.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")
+j12
+dev.off()
+```
+## Development
+```{r}
+final_size <- read.table("../data/CASE_LNDA.txt", sep="\t", header=TRUE)
+final_size <- filter(final_size, Time != "T04")
+final_size <- filter(final_size, N.D.A != "NA")
+
+final_size$Treatment <-factor(final_size$Treatment,levels=c("CON","CA","SE","CASE"))
+final_size$N.D.A <-factor(final_size$N.D.A,levels=c("Dead","Deformed","Normal"))
+
+
+png(filename="../results/LarvalDevelopment.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")
+
+NDA.plot<-ggplot(final_size, aes(x = Treatment, fill = N.D.A)) +
+  geom_bar(position="fill", na.rm = TRUE) +
+facet_grid(rows = vars(Block), cols =vars(Time), scales="free") 
+NDA.plot
+dev.off()
+```
+## Size
+```{r}
+final_size <- read.table("../data/CASE_LARVAL_SIZE.txt", sep="\t", header=TRUE)
+
+final_size <- filter(final_size, Time != "T04")
+final_size <- filter(final_size, Larval.Stage != "Embryo")
+final_size <- filter(final_size, Normal.Deformed == "Normal")
+final_size <- filter(final_size, Alive.Dead == "Alive")
+
+final_size$Treatment <-factor(final_size$Treatment,levels=c("CON","CA","SE","CASE"))
+summary(final_size)
+
+
+ShellHeight <- ggplot(final_size, aes(x=Time, y= Height, fill=Treatment)) +
+
+  geom_boxplot(alpha = 0.5) + 
+  facet_grid(rows = vars(Larval.Stage), cols =vars(Block), scales="free") +
+  #facet_grid(cols =vars(Block), scales="free") +
+  scale_fill_manual(values=cbPaletteSmall5)+
+  scale_color_manual(values=cbPaletteSmall5)+
+  theme_classic() 
+  #coord_flip()
+
+png(filename="../results/ShellHeight.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")  
+ShellHeight
+
+dev.off()
+
+HingeLength <- ggplot(final_size, aes(x=Time, y= Length, fill=Treatment)) +
+geom_boxplot(alpha = 0.5) + 
+facet_grid(rows = vars(Larval.Stage), cols =vars(Block), scales="free") +
+#facet_grid(cols =vars(Block), scales="free") +
+scale_fill_manual(values=cbPaletteSmall5)+
+scale_color_manual(values=cbPaletteSmall5)+
+theme_classic() 
+#coord_flip()
+
+png(filename="../results/HingeLength.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")  
+
+
+HingeLength
+dev.off()
+
+Circumference <- ggplot(final_size, aes(x=Time, y= Circumference, fill=Treatment)) +
+  
+  # add half-violin from {ggdist} package
+  #stat_halfeye(alpha=0.5,
+  # adjust bandwidth
+  #  adjust = 0.5,
+  # move to the right
+  #  justification = -0.2,
+  # remove the slub interval
+  # .width = 0,
+  #  point_colour = NA
+  #)+
+#geom_violin(alpha=0.5) +
+geom_boxplot(
+  #width = 0.12,
+  # removing outliers
+  #outlier.color = NA,
+  alpha = 0.5
+) + 
+  #stat_dots(alpha=0.5,
+  # ploting on left side
+  #  side = "left",
+  # adjusting position
+  #  justification = 1.1,
+  # adjust grouping (binning) of observations
+  #  binwidth = NA
+  #  ) +
+  facet_grid(rows = vars(Larval.Stage), cols =vars(Block), scales="free") +
+  #facet_grid(cols =vars(Block), scales="free") +
+  scale_fill_manual(values=cbPaletteSmall5)+
+  scale_color_manual(values=cbPaletteSmall5)+
+  theme_classic() 
+#coord_flip()
+
+png(filename="../results/Circumference.png", type="cairo",units="px", width=5600, 
+    height=3500, res=600, bg="transparent")  
+
+Circumference
+dev.off()
+
+
+```
+# Genomic Data 
+## Filtering
 ```{bash, eval=FALSE}
 source activate CASE
 cd ../raw.vcf
@@ -173,7 +409,7 @@ cd ../raw.vcf
 bcftools index CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz
 bcftools query -l CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz > samples
 ```
-## Create Unified Sync file
+### Create Unified Sync file
 Each sequencing run had some extra samples that need to be removed before starting the analysis
 Each block was filtered for missing data less than 10% and MAF of > 0.015 based on read counts using VCF file first.
 
@@ -199,7 +435,7 @@ bcftools view -R fil.pos -S <(grep -v 1.GB11 samples | grep -v J17B10| grep -v J
 
 ```
 
-### Create Sync files
+#### Create Sync files
 ```{bash, eval=FALSE}
 source activate CASE
 
@@ -208,7 +444,7 @@ python2 ../scripts/VCFtoPopPool.py temp.vcf CASE.All.Blocks.sync
 rm temp.vcf
 ```
 
-### This sort is to maintain reproducibility across older analysis
+#### This sort is to maintain reproducibility across older analysis
 ```{bash}
 mawk 'BEGIN {OFS="\t"
     order["CHROM"] = 0
@@ -239,7 +475,7 @@ mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' B11.pos CASE.All.Blocks.sync | mawk 
 mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' B12.pos CASE.All.Blocks.sync | mawk 'NR==1{for(i=1;i<=NF;i++)if(i<=3||$i~/B12$/)k[i]}{o="";for(i=1;i<=NF;i++)if(i in k)o=o?o OFS $i:$i;print o}' OFS='\t' | mawk '!/\t\.\t/' > CASE.Block12.sync
 ```
 
-## Add coverage stats to sync file and filter by minimum coverage
+### Add coverage stats to sync file and filter by minimum coverage
 
 ```{bash, eval=FALSE}
 source activate CASE
