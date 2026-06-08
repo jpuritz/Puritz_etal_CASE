@@ -4299,8 +4299,15 @@ A term may match more than one theme (e.g., a "calcium ... mitochondrion"
 term hits both ion and mitochondria themes); counts are therefore overlapping
 summaries, not a partition. This is the figure that conveys the *interpretation*
 — cilia/translation/mitochondria rising into CASE while proteostasis stays flat.
+Each theme row is annotated with representative mollusc genes (from
+`GO/GO_analysis_report.md` §4), so the panel doubles as a mechanism figure;
+those gene names are literature exemplars for orientation, **not** the CASE
+candidate-gene list. Edit `theme_genes` to retune the labels. Tiles are
+**coloured by treatment** (CA = orange, SE = blue, CASE = green — matching
+`Ven.png`) with opacity scaled to the GO-term count; the tier panel is all
+CASE, so it uses the single CASE-green hue.
 
-```{r theme-heatmap, fig.width=9, fig.height=6}
+```{r theme-heatmap, fig.width=11, fig.height=6.5}
 library(tidyr)
 
 themes <- list(
@@ -4322,6 +4329,25 @@ themes <- list(
 )
 theme_levels <- names(themes)
 
+# Representative mollusc genes per theme (from GO_analysis_report.md, Section 4).
+# Used ONLY for axis labels — turns the count heatmap into a mechanism figure.
+# These are literature-derived exemplars, not the CASE candidate-gene list itself.
+theme_genes <- c(
+  "Cilium / microtubule motility" = "tubulin, tektin, dynein",
+  "Ion transport / acid-base"     = "Na/K-ATPase, proton pump, amiloride ch.",
+  "Translation / ribosome"        = "eIFs, Rps8/Rps4x",
+  "Mitochondria / oxidative"      = "ATP synthase, MCU, SOD/GAPDH",
+  "Ubiquitin-proteasome"          = "UPR (IRE1/PERK), ERAD, Ub ligases",
+  "Protein folding / chaperone"   = "HSP70, HSP90, UPR",
+  "Apoptosis / stress response"   = "IAPs, Bcl-2",
+  "DNA repair / replication"      = ""
+)
+# Two-line axis label: theme on top, representative genes beneath (omitted if none).
+theme_lab <- setNames(
+  ifelse(theme_genes[theme_levels] == "", theme_levels,
+         paste0(theme_levels, "\n(", theme_genes[theme_levels], ")")),
+  theme_levels)
+
 # Count unique GO terms matching each theme in one GO data frame.
 theme_counts <- function(df) {
   d <- dedupe_go(df)
@@ -4331,48 +4357,55 @@ theme_counts <- function(df) {
          integer(1))
 }
 
+# Treatment palette — matches Ven.png / cbPaletteSmall3: CA orange, SE blue, CASE green.
+treat_pal <- c(CA = "#E69F00", SE = "#0072B2", CASE = "#009E73")
+
+# Shared heatmap builder (gene-annotated y axis).
+# Tiles are coloured by treatment (`fill_col` hue) and shaded by count (alpha);
+# the count is also printed, so exact values stay legible regardless of shade.
+theme_heatmap <- function(df, x_col, x_levels, fill_col, palette, title_label) {
+  df$theme     <- factor(df$theme, levels = rev(theme_levels),
+                         labels = unname(rev(theme_lab)))
+  df[[x_col]]  <- factor(df[[x_col]], levels = x_levels)
+  ggplot(df, aes(x = .data[[x_col]], y = theme)) +
+    geom_tile(aes(fill = .data[[fill_col]], alpha = n),
+              colour = "white", linewidth = 1) +
+    geom_text(aes(label = n), colour = "grey15", size = 4.5) +
+    scale_fill_manual(values = palette, guide = "none") +
+    scale_alpha(range = c(0.18, 1), limits = c(0, NA), name = "Enriched\nGO terms") +
+    labs(x = NULL, y = NULL, title = title_label) +
+    theme_minimal(base_size = 13) +
+    theme(panel.grid = element_blank(),
+          plot.title.position = "plot",
+          axis.text.x = element_text(face = "bold"),
+          axis.text.y = element_text(hjust = 1, lineheight = 0.95, size = 11))
+}
+
 # ---- 3a: theme x treatment (Total outlier set) ----
 mat_treat <- sapply(list(CA = GO_CA, SE = GO_SE, CASE = GO_CASE), theme_counts)
-df_treat <- as.data.frame(mat_treat) %>%
+df_treat <- as.data.frame(mat_treat, check.names = FALSE) %>%
   mutate(theme = theme_levels) %>%
   pivot_longer(-theme, names_to = "treatment", values_to = "n")
-df_treat$theme     <- factor(df_treat$theme, levels = rev(theme_levels))
-df_treat$treatment <- factor(df_treat$treatment, levels = treat_levels)
-
-p_theme_treat <- ggplot(df_treat, aes(treatment, theme, fill = n)) +
-  geom_tile(colour = "white", linewidth = 1) +
-  geom_text(aes(label = n), colour = "grey10", size = 4.5) +
-  scale_fill_gradient(low = "#EAF6F6", high = "#2B7DE9", name = "Enriched\nGO terms") +
-  labs(x = NULL, y = NULL,
-       title = "Enriched GO terms by biological theme and stressor") +
-  theme_minimal(base_size = 13) +
-  theme(panel.grid = element_blank(), axis.text.y = element_text(hjust = 1))
-
+p_theme_treat <- theme_heatmap(df_treat, "treatment", treat_levels,
+  fill_col = "treatment", palette = treat_pal,
+  title_label = "Enriched GO terms by biological theme and stressor")
 print(p_theme_treat)
 ggsave("GO/GO_theme_heatmap_treatment.png", p_theme_treat,
-       width = 9, height = 6, dpi = 300, bg = "transparent")
+       width = 11, height = 6.5, dpi = 300, bg = "transparent")
 
 # ---- 3b: theme x tier, for the CASE treatment ----
-case_by_tier <- list(Core = GO_Core_CASE, Aggregate = GO_Agg_CASE,
-                     "Block-Specific" = GO_BS_CASE)
-mat_tier <- sapply(case_by_tier, theme_counts)
-df_tier <- as.data.frame(mat_tier) %>%
+mat_tier <- sapply(list(Core = GO_Core_CASE, Aggregate = GO_Agg_CASE,
+                        "Block-Specific" = GO_BS_CASE), theme_counts)
+df_tier <- as.data.frame(mat_tier, check.names = FALSE) %>%
   mutate(theme = theme_levels) %>%
   pivot_longer(-theme, names_to = "tier", values_to = "n")
-df_tier$theme <- factor(df_tier$theme, levels = rev(theme_levels))
-df_tier$tier  <- factor(df_tier$tier,
-                        levels = c("Core", "Aggregate", "Block-Specific"))
-
-p_theme_tier <- ggplot(df_tier, aes(tier, theme, fill = n)) +
-  geom_tile(colour = "white", linewidth = 1) +
-  geom_text(aes(label = n), colour = "grey10", size = 4.5) +
-  scale_fill_gradient(low = "#FBF0E7", high = "#E69F00", name = "Enriched\nGO terms") +
-  labs(x = NULL, y = NULL, title = "CASE: enriched GO terms by theme and locus tier") +
-  theme_minimal(base_size = 13) +
-  theme(panel.grid = element_blank(), axis.text.y = element_text(hjust = 1))
-
+df_tier$fillgrp <- "CASE"   # tier panel is all CASE -> single CASE-green hue
+p_theme_tier <- theme_heatmap(df_tier, "tier",
+  c("Core", "Aggregate", "Block-Specific"),
+  fill_col = "fillgrp", palette = treat_pal,
+  title_label = "CASE: enriched GO terms by theme and locus tier")
 print(p_theme_tier)
 ggsave("GO/GO_theme_heatmap_CASE_by_tier.png", p_theme_tier,
-       width = 8, height = 6, dpi = 300, bg = "transparent")
+       width = 10, height = 6.5, dpi = 300, bg = "transparent")
 ```
 
