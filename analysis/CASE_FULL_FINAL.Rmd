@@ -1933,6 +1933,11 @@ p <- p+ theme_black() + theme(legend.position = "none")
 
 pp <- publish_gostplot(p, width = NA, height = NA, filename = NULL )
 
+# Save gprofiler2 results table (Tier 1)
+gost_df <- gostres$result
+gost_df$intersection <- sapply(gost_df$intersection, paste, collapse = ",")
+write.csv(gost_df, "GO/gprofiler_Tier1_results.csv", row.names = FALSE)
+
 png(filename="TestGO.png", type="cairo",units="px", width=4000, height=2500, res=300, bg="transparent")
 
 pp
@@ -1957,6 +1962,12 @@ gostres.core <- gost(
 p.core   <- gostplot(gostres.core, capped = TRUE, interactive = FALSE)
 p.core   <- p.core + theme_black() + theme(legend.position = "none")
 pp.core  <- publish_gostplot(p.core, width = NA, height = NA, filename = NULL)
+
+# Save gprofiler2 results table (Core)
+gost_core_df <- gostres.core$result
+gost_core_df$intersection <- sapply(gost_core_df$intersection, paste, collapse = ",")
+write.csv(gost_core_df, "GO/gprofiler_Core_results.csv", row.names = FALSE)
+
 png(filename = "TestGO.Core.png", type = "cairo", units = "px",
     width = 4000, height = 2500, res = 300, bg = "transparent")
 pp.core
@@ -1977,6 +1988,12 @@ gostres.bs <- gost(
 p.bs   <- gostplot(gostres.bs, capped = TRUE, interactive = FALSE)
 p.bs   <- p.bs + theme_black() + theme(legend.position = "none")
 pp.bs  <- publish_gostplot(p.bs, width = NA, height = NA, filename = NULL)
+
+# Save gprofiler2 results table (Block-Specific)
+gost_bs_df <- gostres.bs$result
+gost_bs_df$intersection <- sapply(gost_bs_df$intersection, paste, collapse = ",")
+write.csv(gost_bs_df, "GO/gprofiler_BS_results.csv", row.names = FALSE)
+
 png(filename = "TestGO.BS.png", type = "cairo", units = "px",
     width = 4000, height = 2500, res = 300, bg = "transparent")
 pp.bs
@@ -1997,6 +2014,12 @@ gostres.agg <- gost(
 p.agg   <- gostplot(gostres.agg, capped = TRUE, interactive = FALSE)
 p.agg   <- p.agg + theme_black() + theme(legend.position = "none")
 pp.agg  <- publish_gostplot(p.agg, width = NA, height = NA, filename = NULL)
+
+# Save gprofiler2 results table (Aggregate)
+gost_agg_df <- gostres.agg$result
+gost_agg_df$intersection <- sapply(gost_agg_df$intersection, paste, collapse = ",")
+write.csv(gost_agg_df, "GO/gprofiler_Agg_results.csv", row.names = FALSE)
+
 png(filename = "TestGO.Agg.png", type = "cairo", units = "px",
     width = 4000, height = 2500, res = 300, bg = "transparent")
 pp.agg
@@ -2292,6 +2315,83 @@ if(!is.null(GO_Agg_ALL))  write.csv(GO_Agg_ALL,  "GO/Agg_ALL_GO_en_sig_gene.csv"
 if(!is.null(GO_Agg_CA))   write.csv(GO_Agg_CA,   "GO/Agg_CA_GO_en_sig_gene.csv",   row.names = FALSE)
 if(!is.null(GO_Agg_SE))   write.csv(GO_Agg_SE,   "GO/Agg_SE_GO_en_sig_gene.csv",   row.names = FALSE)
 if(!is.null(GO_Agg_CASE)) write.csv(GO_Agg_CASE, "GO/Agg_CASE_GO_en_sig_gene.csv", row.names = FALSE)
+```
+
+### gprofiler2 vs topGO comparison
+
+Helper function to compare significant GO:BP terms between the two methods for one tier × stressor combination. gprofiler2 uses its own background (all annotated genes in its organism database), while topGO uses the `gene2go_full.tab`-derived background, so overlap is informative but not expected to be perfect.
+
+```{r}
+compare_go_methods <- function(gost_file, topgo_result, stressor_label, tier_label) {
+  if (!file.exists(gost_file)) {
+    message(paste("gprofiler2 file not found:", gost_file))
+    return(NULL)
+  }
+
+  gpro <- read.csv(gost_file) %>%
+    filter(query == stressor_label, source == "GO:BP") %>%
+    select(term_id, term_name, p_value) %>%
+    rename(GO.ID = term_id, gprofiler_term = term_name, gprofiler_p = p_value)
+
+  if (is.null(topgo_result)) {
+    tgo <- data.frame(GO.ID = character(), topGO_term = character(), topGO_p = numeric())
+  } else {
+    tgo <- topgo_result %>%
+      filter(ontology == "Biological Processes") %>%
+      distinct(GeneOntologyIDs, .keep_all = TRUE) %>%
+      select(GeneOntologyIDs, Term, Fisher) %>%
+      rename(GO.ID = GeneOntologyIDs, topGO_term = Term, topGO_p = Fisher)
+  }
+
+  comparison <- full_join(gpro, tgo, by = "GO.ID") %>%
+    mutate(
+      term_name    = coalesce(gprofiler_term, topGO_term),
+      in_gprofiler = !is.na(gprofiler_p),
+      in_topGO     = !is.na(topGO_p),
+      agreement    = in_gprofiler & in_topGO,
+      tier         = tier_label,
+      stressor     = stressor_label
+    ) %>%
+    select(tier, stressor, GO.ID, term_name, gprofiler_p, topGO_p, in_gprofiler, in_topGO, agreement)
+
+  cat(sprintf("[%s | %s]  gprofiler2: %d  |  topGO: %d  |  Overlap: %d\n",
+      tier_label, stressor_label,
+      sum(comparison$in_gprofiler), sum(comparison$in_topGO), sum(comparison$agreement)))
+
+  comparison
+}
+```
+
+```{r}
+# Tier 1 comparisons
+comp_T1_CASE <- compare_go_methods("GO/gprofiler_Tier1_results.csv", GO_CASE, "CASE", "Tier1")
+comp_T1_CA   <- compare_go_methods("GO/gprofiler_Tier1_results.csv", GO_CA,   "CA",   "Tier1")
+comp_T1_SE   <- compare_go_methods("GO/gprofiler_Tier1_results.csv", GO_SE,   "SE",   "Tier1")
+
+# Core comparisons
+comp_Core_CASE <- compare_go_methods("GO/gprofiler_Core_results.csv", GO_Core_CASE, "CASE", "Core")
+comp_Core_CA   <- compare_go_methods("GO/gprofiler_Core_results.csv", GO_Core_CA,   "CA",   "Core")
+comp_Core_SE   <- compare_go_methods("GO/gprofiler_Core_results.csv", GO_Core_SE,   "SE",   "Core")
+
+# Block-Specific comparisons
+comp_BS_CASE <- compare_go_methods("GO/gprofiler_BS_results.csv", GO_BS_CASE, "CASE", "Block-Specific")
+comp_BS_CA   <- compare_go_methods("GO/gprofiler_BS_results.csv", GO_BS_CA,   "CA",   "Block-Specific")
+comp_BS_SE   <- compare_go_methods("GO/gprofiler_BS_results.csv", GO_BS_SE,   "SE",   "Block-Specific")
+
+# Aggregate comparisons
+comp_Agg_CASE <- compare_go_methods("GO/gprofiler_Agg_results.csv", GO_Agg_CASE, "CASE", "Aggregate")
+comp_Agg_CA   <- compare_go_methods("GO/gprofiler_Agg_results.csv", GO_Agg_CA,   "CA",   "Aggregate")
+comp_Agg_SE   <- compare_go_methods("GO/gprofiler_Agg_results.csv", GO_Agg_SE,   "SE",   "Aggregate")
+
+# Combine and save
+all_comparisons <- bind_rows(
+  comp_T1_CASE, comp_T1_CA, comp_T1_SE,
+  comp_Core_CASE, comp_Core_CA, comp_Core_SE,
+  comp_BS_CASE, comp_BS_CA, comp_BS_SE,
+  comp_Agg_CASE, comp_Agg_CA, comp_Agg_SE
+)
+
+write.csv(all_comparisons, "GO/gprofiler_vs_topGO_comparison.csv", row.names = FALSE)
 ```
 
 ### Plot GO enrichment for each stressor category
