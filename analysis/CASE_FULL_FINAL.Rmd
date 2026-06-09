@@ -1936,6 +1936,7 @@ pp <- publish_gostplot(p, width = NA, height = NA, filename = NULL )
 # Save gprofiler2 results table (Tier 1)
 gost_df <- gostres$result
 gost_df$intersection <- sapply(gost_df$intersection, paste, collapse = ",")
+gost_df$parents      <- sapply(gost_df$parents,      paste, collapse = ",")
 write.csv(gost_df, "GO/gprofiler_Tier1_results.csv", row.names = FALSE)
 
 png(filename="TestGO.png", type="cairo",units="px", width=4000, height=2500, res=300, bg="transparent")
@@ -1966,6 +1967,7 @@ pp.core  <- publish_gostplot(p.core, width = NA, height = NA, filename = NULL)
 # Save gprofiler2 results table (Core)
 gost_core_df <- gostres.core$result
 gost_core_df$intersection <- sapply(gost_core_df$intersection, paste, collapse = ",")
+gost_core_df$parents      <- sapply(gost_core_df$parents,      paste, collapse = ",")
 write.csv(gost_core_df, "GO/gprofiler_Core_results.csv", row.names = FALSE)
 
 png(filename = "TestGO.Core.png", type = "cairo", units = "px",
@@ -1992,6 +1994,7 @@ pp.bs  <- publish_gostplot(p.bs, width = NA, height = NA, filename = NULL)
 # Save gprofiler2 results table (Block-Specific)
 gost_bs_df <- gostres.bs$result
 gost_bs_df$intersection <- sapply(gost_bs_df$intersection, paste, collapse = ",")
+gost_bs_df$parents      <- sapply(gost_bs_df$parents,      paste, collapse = ",")
 write.csv(gost_bs_df, "GO/gprofiler_BS_results.csv", row.names = FALSE)
 
 png(filename = "TestGO.BS.png", type = "cairo", units = "px",
@@ -2018,6 +2021,7 @@ pp.agg  <- publish_gostplot(p.agg, width = NA, height = NA, filename = NULL)
 # Save gprofiler2 results table (Aggregate)
 gost_agg_df <- gostres.agg$result
 gost_agg_df$intersection <- sapply(gost_agg_df$intersection, paste, collapse = ",")
+gost_agg_df$parents      <- sapply(gost_agg_df$parents,      paste, collapse = ",")
 write.csv(gost_agg_df, "GO/gprofiler_Agg_results.csv", row.names = FALSE)
 
 png(filename = "TestGO.Agg.png", type = "cairo", units = "px",
