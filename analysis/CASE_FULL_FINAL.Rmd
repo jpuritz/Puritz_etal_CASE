@@ -2334,7 +2334,7 @@ compare_go_methods <- function(gost_file, topgo_result, stressor_label, tier_lab
 
   gpro <- read.csv(gost_file) %>%
     filter(query == stressor_label, source == "GO:BP") %>%
-    select(term_id, term_name, p_value) %>%
+    dplyr::select(term_id, term_name, p_value) %>%
     rename(GO.ID = term_id, gprofiler_term = term_name, gprofiler_p = p_value)
 
   if (is.null(topgo_result)) {
@@ -2343,7 +2343,7 @@ compare_go_methods <- function(gost_file, topgo_result, stressor_label, tier_lab
     tgo <- topgo_result %>%
       filter(ontology == "Biological Processes") %>%
       distinct(GeneOntologyIDs, .keep_all = TRUE) %>%
-      select(GeneOntologyIDs, Term, Fisher) %>%
+      dplyr::select(GeneOntologyIDs, Term, Fisher) %>%
       rename(GO.ID = GeneOntologyIDs, topGO_term = Term, topGO_p = Fisher)
   }
 
@@ -2356,7 +2356,7 @@ compare_go_methods <- function(gost_file, topgo_result, stressor_label, tier_lab
       tier         = tier_label,
       stressor     = stressor_label
     ) %>%
-    select(tier, stressor, GO.ID, term_name, gprofiler_p, topGO_p, in_gprofiler, in_topGO, agreement)
+    dplyr::select(tier, stressor, GO.ID, term_name, gprofiler_p, topGO_p, in_gprofiler, in_topGO, agreement)
 
   cat(sprintf("[%s | %s]  gprofiler2: %d  |  topGO: %d  |  Overlap: %d\n",
       tier_label, stressor_label,
