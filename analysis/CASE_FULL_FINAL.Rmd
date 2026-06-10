@@ -2335,7 +2335,7 @@ compare_go_methods <- function(gost_file, topgo_result, stressor_label, tier_lab
   gpro <- read.csv(gost_file) %>%
     filter(query == stressor_label, source == "GO:BP") %>%
     dplyr::select(term_id, term_name, p_value) %>%
-    rename(GO.ID = term_id, gprofiler_term = term_name, gprofiler_p = p_value)
+    dplyr::rename(GO.ID = term_id, gprofiler_term = term_name, gprofiler_p = p_value)
 
   if (is.null(topgo_result)) {
     tgo <- data.frame(GO.ID = character(), topGO_term = character(), topGO_p = numeric())
@@ -2344,7 +2344,7 @@ compare_go_methods <- function(gost_file, topgo_result, stressor_label, tier_lab
       filter(ontology == "Biological Processes") %>%
       distinct(GeneOntologyIDs, .keep_all = TRUE) %>%
       dplyr::select(GeneOntologyIDs, Term, Fisher) %>%
-      rename(GO.ID = GeneOntologyIDs, topGO_term = Term, topGO_p = Fisher)
+      dplyr::rename(GO.ID = GeneOntologyIDs, topGO_term = Term, topGO_p = Fisher)
   }
 
   comparison <- full_join(gpro, tgo, by = "GO.ID") %>%
