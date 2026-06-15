@@ -2685,7 +2685,7 @@ figS6
 # No gprofiler / gostres dependency.
 go_files <- c(CA = "CA_GO_en_sig_gene.csv", SE = "SE_GO_en_sig_gene.csv", CASE = "CASE_GO_en_sig_gene.csv")
 # find the GO dir regardless of the current working directory (analysis/, project root, etc.)
-go_dir <- "../GO"
+go_dir <- "./GO"
 godat <- rbindlist(lapply(names(go_files), function(tr) {
     d <- fread(file.path(go_dir, go_files[[tr]])); d[, stressor := tr]; d
   }), fill = TRUE)
