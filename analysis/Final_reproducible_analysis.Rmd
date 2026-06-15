@@ -1,6 +1,6 @@
 ---
 title: "CASE — Reproducible Analysis (Coastal Acidification & Sewage Effluent)"
-author: "Puritz Lab"
+author: "Jonathan Puritz"
 date: "`r Sys.Date()`"
 output:
   github_document:
@@ -9,7 +9,7 @@ output:
 ---
 
 > Single reproducible pipeline for the CASE study. The document is organized
-> around the four main figures (survival → outliers & repeatability → genomic
+> around the five main figures (survival → outliers & repeatability → genomic
 > synergy → tier architecture); a shared genomic-substrate section precedes the
 > figures because Figs 2–4 all depend on the same allele-frequency, CMH and
 > locus-tier objects. Supplementary figures (S1–S7) and tables follow each
@@ -92,7 +92,7 @@ theme_case <- function(base_size = 16) {
 
 # ---- shared helper functions ------------------------------------------------
 # Convert per-treatment CMH p-values to q-values (pi0 = 1 => Benjamini-Hochberg)
-# and relabel C. virginica chromosomes 1-10 from their RefSeq accessions.
+# and relabel chromosomes 1-10 from their RefSeq accessions.
 Qvalue_convert <- function(table) {
   table <- spread(table, GROUP, PVAL)
   table$CHR <- table$CHROM
@@ -138,7 +138,7 @@ group_and_average <- function(df) {
                      CHROM = dplyr::first(CHROM), BP = dplyr::first(BP), .groups = "drop")
 }
 
-mort_file <- "../data/CASE_FINAL_Mortality.txt"
+
 ```
 
 ## Software environment
@@ -155,6 +155,7 @@ mamba env create --file ../random_draw_environment.yaml
 ## Survival statistics
 
 ```{r survival-stats}
+mort_file <- "../data/CASE_FINAL_Mortality.txt"
 final_data <- read.table(mort_file, sep = "\t", header = TRUE)
 final_data$Treatment <- factor(final_data$Treatment, levels = c("CON","CA","SE","CASE"))
 final_data_end <- subset(final_data, final_data$Time > 12)
@@ -300,10 +301,6 @@ bcftools view -S <(grep B12 samples) CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz | bcftools
 cat B*.pos | sort | uniq > fil.pos
 
 bcftools view -R fil.pos -S <(grep -v 1.GB11 samples | grep -v J17B10| grep -v J05B10) --threads 40 -m2 -M 4 CASE.TRSdp.20.g5.nDNA.FIL.vcf.gz -O z -o SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz
-
-#bcftools view --threads 40 SNP.CASE.TRSdp.20.B90.2a.perp.vcf.gz | mawk '!/#/' | cut -f 1,2 | mawk '{print $1"\t"$2-1"\t"$2}' > total.snp.bed
-
-#bedtools intersect -wb -a total.snp.bed -b ~/CASE/analysis/sorted.ref3.0.gene.bed | grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > CASE.study.background.LOC
 
 ```
 
@@ -522,7 +519,7 @@ mawk -f ../scripts/add_cov_sync_IS CASE.B10.ISsum3.sync | mawk -v x=$AV_COV '$7 
 paste CASE.dp20.Block10.cov.sync <(mawk -f ../scripts/add_cov_sync CASE.B10.ISsum3.sync ) | mawk -v x=$AV_COV '$29 >= x' | cut -f1-22 > temp.sync
 
 mv temp.sync CASE.dp20.Block10.COV.sync
-#cp CASE.dp20.Block10.cov.sync CASE.dp20.Block10.COV.sync
+
 mawk -f ../scripts/add_cov_sync <(cut -f13-16,20- --complement CASE.dp20.Block10.COV.sync) > temp.cov
 
 
@@ -532,7 +529,7 @@ paste temp.cov <(cut -f7 CASE.B10.ISsum3nh.cov.sync) | mawk -v OFS='\t' '{if ($1
 ```{bash, eval=FALSE}
 source activate random_draw
 
-#python ../scripts/sub_sample.py CASE.dp20.Block10.COV CASE.B10.ISsum3nh.sync CASE.B10.ISs.sync
+
 python ../scripts/sub_sample.py CASE.B10.ISsum3nh.cov.sync CASE.B10.ISsum3nh.sync CASE.B10.ISs.sync
 
 cat <(echo -e "CHROM\tPOS\tREF\tIS_RS1\tIS_RS2\tIS_RS3") CASE.B10.ISs.sync > CASE.B10.ISsum.sync
@@ -581,7 +578,7 @@ mawk -f ../scripts/add_cov_sync <(cut -f16-19 --complement CASE.dp20.Block11.COV
 
 source activate random_draw
 
-#python ../scripts/sub_sample.py CASE.dp20.Block11.COV CASE.B11.ISsum4nh.sync CASE.B11.ISs.sync
+
 python ../scripts/sub_sample.py CASE.B11.ISsum4.cov.sync CASE.B11.ISsum4nh.sync CASE.B11.ISs.sync
 
 cat <(echo -e "CHROM\tPOS\tREF\tIS_RS1\tIS_RS2\tIS_RS3\tIS_R4") CASE.B11.ISs.sync > CASE.B11.ISsum.sync
@@ -640,7 +637,6 @@ rm temp.cov.sync
 ```{bash, eval=FALSE}
 source activate random_draw
 
-#python ../scripts/sub_sample.py CASE.dp20.Block12.COV CASE.B12.ISsum4nh.sync CASE.B12.ISs.sync
 python ../scripts/sub_sample.py CASE.B12.ISsum4nh.cov.sync CASE.B12.ISsum4nh.sync CASE.B12.ISs.sync
 
 cat <(echo -e "CHROM\tPOS\tREF\tIS_RS1\tIS_RS2\tIS_RS3\tIS_R4") CASE.B12.ISs.sync > CASE.B12.ISsum.sync
@@ -809,7 +805,6 @@ colnames(psedf) <- c("Locus","PVAL")
 psedf$GROUP <- "PSE"
 
 
-
 con.b12.pvals <- adapted.cmh.test(freq=con.b12.af, coverage=con.b12.cov, Ne=rep(1000, 4), gen=c(0, 1, 0, 1, 0, 1, 0, 1), repl=c(1, 1, 2, 2, 3, 3, 4, 4), poolSize=rep(c(40000,10000), ncol(con.b12.af)/2), MeanStart = TRUE, mincov =20)
 
 pcondf <- as.data.table(cbind(row.names(con.b12.af),con.b12.pvals))
@@ -892,7 +887,6 @@ cat <(echo -e "CHROM\tPOS\tREF\tISB12_RS1\tISB12_RS2\tISB12_RS3\tISB12_RS4") CAS
 
 paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f15 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f19 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f22 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f16 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f21 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f23 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B11.ISsum.AB.sync) <(cut -f24 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f17 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f18 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f20 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B12.ISsum.AB.sync) <(cut -f25 CASE.All.Blocks.cov.fil.sync) > CASE.AB.sync
 
-#paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f15 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f19 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f22 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f16 CASE.All.Blocks.cov.fil.sync)  <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f23 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f24 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f17 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f18 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f20 CASE.All.Blocks.cov.fil.sync)  > CASE.AB.sync
 
 tail -n +2 CASE.AB.sync | mawk '$2 != 74609903 && $2 != 93711267 && $2 != 36030885' > CASE.AB.input 
 
@@ -904,13 +898,11 @@ tail -n +2 CA.AB.sync | mawk '$2 != 93711267 && $2 != 59024150 && $2 != 2532550'
 
 paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f26 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f30 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f32 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f27 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f29 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f33 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B11.ISsum.AB.sync) <(cut -f35 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f28 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f31 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f34 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B12.ISsum.AB.sync) <(cut -f36 CASE.All.Blocks.cov.fil.sync) > CON.AB.sync
 
-#paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f26 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f30 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f32 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f27 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f29 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f35 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f28 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f31 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f34 CASE.All.Blocks.cov.fil.sync)  > CON.AB.sync
 
 tail -n +2 CON.AB.sync | mawk '$2 != 34804390 && $2 != 54895214 && $2 !=  49000140 && $2 != 15140923' > CON.AB.input 
 
 paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f51 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f52 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f55 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f49 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f53 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f54 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B11.ISsum.AB.sync) <(cut -f58 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f50 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f56 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f57 CASE.All.Blocks.cov.fil.sync) <(cut -f7 CASE.B12.ISsum.AB.sync) <(cut -f59 CASE.All.Blocks.cov.fil.sync) > SE.AB.sync
 
-#paste <(cut -f1-4 CASE.B10.ISsum.AB.sync) <(cut -f51 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B10.ISsum.AB.sync) <(cut -f52 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B10.ISsum.AB.sync) <(cut -f55 CASE.All.Blocks.cov.fil.sync) <(cut -f4 CASE.B11.ISsum.AB.sync) <(cut -f49 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B11.ISsum.AB.sync) <(cut -f54 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B11.ISsum.AB.sync) <(cut -f58 CASE.All.Blocks.cov.fil.sync)  <(cut -f4 CASE.B12.ISsum.AB.sync) <(cut -f56 CASE.All.Blocks.cov.fil.sync) <(cut -f5 CASE.B12.ISsum.AB.sync) <(cut -f57 CASE.All.Blocks.cov.fil.sync) <(cut -f6 CASE.B12.ISsum.AB.sync) <(cut -f59 CASE.All.Blocks.cov.fil.sync) > SE.AB.sync
 
 tail -n +2 SE.AB.sync | mawk '$2 != 67902213 && $2 != 19828063 && $2 != 93711267 ' > SE.AB.input 
 
@@ -959,7 +951,6 @@ pcondf <- as.data.table(cbind(row.names(con.ab.af),con.ab.pvals))
 colnames(pcondf) <- c("Locus","PVAL")
 pcondf$GROUP <- "PCON"
 
-
 AB.pval.table <- bind_rows(pcadf,pcasedf,pcondf,psedf)
 AB.pval.table <- AB.pval.table %>%
   separate(Locus, into = c("CHROM", "BP"), sep = "\\.(?=[^.]+$)")
@@ -1007,12 +998,12 @@ apply_treatment_filter <- function(df, keep_treatment) {
   df
 }
 
-# top5pct_filter: within the already-significant loci (df), retain only those
+# top1pct_filter: within the already-significant loci (df), retain only those
 # whose treatment q-value falls in the top 1% of that significant set.
 # Quantiles are computed only on loci with QCON > 0.1 so that CON-significant
 # loci with inflated treatment signal do not pull the threshold up against
 # genuinely treatment-specific outliers.
-top5pct_filter <- function(df) {
+top1pct_filter <- function(df) {
   df_con <- subset(df, QCON > 0.1)
   subset(df,
     (Sig.CASE == TRUE & QCASE < quantile(df_con$QCASE, na.rm = TRUE, probs = 0.01)) |
@@ -1116,14 +1107,14 @@ write.table(ppsig.B12.01,    "Sig.Loci.FDR01.Block12",  sep = "\t", row.names = 
 # ══════════════════════════════════════════════════════════════════════════════
 # BLOCK-SPECIFIC TIER: block-specific alpha thresholds AND top 1% of q-values
 # ══════════════════════════════════════════════════════════════════════════════
-# top5pct_filter selects the top 1% strongest signals among already-significant
+# top1pct_filter selects the top 1% strongest signals among already-significant
 # loci (quantile computed on CON-clean subset; QCON > 0.1).
 # Block alphas: B10 = 0.001 (drift correction), B11 = 0.1 (power correction),
 # B12 = 0.01 (base). Restricted to singletons via semi_join below.
 
-ppsig.B10 <- Significat_subset(B10.pv, B10.alpha,     alpha2) %>% top5pct_filter()
-ppsig.B11 <- Significat_subset(B11.pv, B11.alpha, alpha2) %>% top5pct_filter()
-ppsig.B12 <- Significat_subset(B12.pv, alpha,     alpha2) %>% top5pct_filter()
+ppsig.B10 <- Significat_subset(B10.pv, B10.alpha,     alpha2) %>% top1pct_filter()
+ppsig.B11 <- Significat_subset(B11.pv, B11.alpha, alpha2) %>% top1pct_filter()
+ppsig.B12 <- Significat_subset(B12.pv, alpha,     alpha2) %>% top1pct_filter()
 
 ppsig.B10$BLOCK <- 10
 ppsig.B11$BLOCK <- 11
@@ -2012,8 +2003,8 @@ if (have_genes) {
   cat("loci mapped to a gene:", length(gene_of), "of", nrow(all_snps), "\n")
 
   # Optional LOC -> display symbol: use the GFF/bed `Name=` attribute where present,
-  # otherwise keep the LOC id. (Most C. virginica loci are LOC-only.) If you have a
-  # curated LOC->symbol table, set gene_sym from it instead.
+  # otherwise keep the LOC id. (Most C. virginica loci are LOC-only.) 
+  
   nm <- sub('.*Name=([^;]+).*', '\\1', attr_col)
   has_nm <- grepl('Name=', attr_col) & grepl('^LOC[0-9]+$', genes_raw_gene <- sub('.*gene=(LOC[0-9]+).*','\\1', attr_col))
   sym_dt <- data.table(gene = genes_raw_gene, sym = ifelse(grepl('Name=', attr_col), nm, NA_character_))
@@ -2789,23 +2780,12 @@ fig5
 # Both the Manhattan and GO panels are nested 3-plot stacks -> wrap each as one area so
 # their three sub-rows line up at equal height.
 man_el <- patchwork::wrap_elements(fig3_man)
-# go_panel renders perfectly on its own (Fig3_GO_topGO.png, sized to match cell B's
-# aspect ratio) but patchwork's automatic sizing leaves margins when it's dropped in
-# directly -- so embed the verified PNG as a raster instead of re-laying-out the ggplot.
-go_png_path <- file.path(out_dir, "Fig3_GO_topGO.png")
-#go_el <- if (!is.null(go_panel) && file.exists(go_png_path)) {
-  # full = ... (not panel = ...) so the raster occupies the entire element with no
-  # reserved space for axis titles/labels/legends -- that reserved-but-empty space
-  # around a "panel" grob was the source of the left/right whitespace.
- # patchwork::wrap_elements(full = grid::rasterGrob(png::readPNG(go_png_path),
-  #                                                  width = unit(1, "npc"), height = unit(1, "npc"))) +
-  #  theme(plot.margin = margin(t = 24, r = 8, b = 12, l = 0))
-#} else patchwork::plot_spacer()
+go_el <- patchwork::wrap_elements(full=go_panel)
+
 
 # Layout (8 cols): top 4 rows = Manhattan (A, 5/8) | GO stack (B, 3/8)  [taller];
 #                  bottom 2 rows = combined Venn (C, 4/8) | heatmap (D, 4/8) -- even split.
 
-go_el <- patchwork::wrap_elements(full=go_panel)
 
 design3 <- "
 AAB
