@@ -1931,6 +1931,80 @@ if(!is.null(GO_Conv_SE))   write.csv(GO_Conv_SE,   "./GO/Conv_SE_GO_en_sig_gene.
 if(!is.null(GO_Conv_CASE)) write.csv(GO_Conv_CASE, "./GO/Conv_CASE_GO_en_sig_gene.csv", row.names = FALSE)
 ```
 
+## Data-driven GO clusters (mechanism themes for Fig 3D + Table S)
+
+Groups the enriched GO terms (pooled across CA/SE/CASE) by overlap of the
+candidate genes annotated to them (Jaccard >= 0.10), finds communities with
+`igraph` greedy modularity, and tags an interpretive set of stress-relevant
+clusters. The clustering is data-driven and reproducible; the stress
+selection/naming is a curated overlay anchored on stable GO IDs. Builds
+`go_clusters_stress` (Fig 3D) and `go_clusters_full` (Table S).
+
+```{r go-cluster-themes, message=FALSE}
+library(igraph)
+go_list <- Filter(Negate(is.null), list(GO_CA, GO_SE, GO_CASE))
+go_pool <- as.data.table(rbindlist(go_list, fill = TRUE))
+setnames(go_pool, "GeneOntologyIDs", "GO")
+go_pool[, Fisher := suppressWarnings(as.numeric(Fisher))]
+go_pool <- go_pool[is.finite(Fisher)]
+
+# one row per GO term: representative text, min Fisher, per-treatment enrichment, gene set
+term_info  <- go_pool[, .(Term = Term[1L], Fisher = min(Fisher),
+                          CA = as.integer(any(stressor=="CA")),
+                          SE = as.integer(any(stressor=="SE")),
+                          CASE = as.integer(any(stressor=="CASE"))), by = GO]
+gene_by_go <- go_pool[, .(g = list(unique(gene_name))), by = GO]
+term_info  <- merge(term_info, gene_by_go, by = "GO")
+term_info[, ngenes := lengths(g)]
+clG <- term_info[ngenes >= 2]                          # need >=2 genes to share
+
+# gene-overlap Jaccard edge list (n ~ 180 terms; nested loop is fine)
+THR <- 0.10
+gl <- clG$g; ids <- clG$GO
+from <- character(0); to <- character(0); w <- numeric(0)
+if (length(ids) > 1L) for (i in 1:(length(ids)-1L)) {
+  gi <- gl[[i]]
+  for (j in (i+1L):length(ids)) {
+    inter <- length(intersect(gi, gl[[j]]))
+    if (inter == 0L) next
+    jac <- inter / length(union(gi, gl[[j]]))
+    if (jac >= THR) { from <- c(from, ids[i]); to <- c(to, ids[j]); w <- c(w, jac) }
+  }
+}
+g <- graph_from_data_frame(data.frame(from = from, to = to, weight = w),
+                           directed = FALSE, vertices = data.frame(name = ids))
+comm <- cluster_fast_greedy(g, weights = E(g)$weight)
+clG[, cluster_id := as.integer(membership(comm)[GO])]
+clG <- clG[cluster_id %in% clG[, .N, by = cluster_id][N >= 3, cluster_id]]   # >=3 terms
+
+# curated stress overlay: category -> stable anchor GO IDs (a cluster is that
+# category if it contains ANY anchor). Robust to representative-term tie-breaks.
+stress_cats <- list(
+  "Protein folding / chaperone"                     = c("GO:0051082","GO:0006457","GO:0005832"),
+  "Ubiquitin-proteasome / translational repression" = c("GO:0030371","GO:0043161","GO:0000209","GO:0061630"),
+  "Ubiquitin ligase / proteolysis"                  = c("GO:0031625","GO:0019941","GO:0030162"),
+  "Acid-base / V-type ATPase"                        = c("GO:0046961","GO:1902600","GO:0016471","GO:0033179"),
+  "Na/K ionoregulation"                              = c("GO:0006883","GO:0036376","GO:0030007","GO:1990573"),
+  "Mitochondrial calcium"                            = c("GO:0036444","GO:1990246","GO:0051560"),
+  "Cilium / ciliary motility"                        = c("GO:0001669","GO:0036064","GO:0060294","GO:0031514","GO:0003341"),
+  "Stress granule / mRNA processing"                 = c("GO:0006376","GO:0010494","GO:0008143","GO:0003730"),
+  "Translation initiation"                           = c("GO:0003729","GO:0003743","GO:0001732"),
+  "Steroid / progesterone metabolism"               = c("GO:0004508","GO:0047442","GO:0042448"))
+cat_of <- function(gos) { for (nm in names(stress_cats)) if (any(gos %in% stress_cats[[nm]])) return(nm); NA_character_ }
+cl_sum <- clG[, .(category = cat_of(GO), rep_term = Term[which.min(Fisher)], minF = min(Fisher),
+                  CA = sum(CA), SE = sum(SE), CASE = sum(CASE), n = .N), by = cluster_id]
+cl_sum[, cluster := data.table::fifelse(is.na(category), paste0("Other: ", rep_term), category)]
+cl_sum[, stress  := !is.na(category)]
+clG <- merge(clG, cl_sum[, .(cluster_id, cluster, stress, minF)], by = "cluster_id")
+
+go_clusters_full   <- clG[order(minF, Fisher), .(cluster, stress, GO, Term, Fisher, CA, SE, CASE)]
+go_clusters_stress <- cl_sum[stress == TRUE][order(minF), .(cluster, CA, SE, CASE, n, minF)]
+fwrite(go_clusters_full,   file.path(tab_dir, "TableS_GO_clusters_full.csv"))
+fwrite(go_clusters_stress, file.path(tab_dir, "TableS_GO_clusters_stress.csv"))
+cat("data-driven clusters:", uniqueN(clG$cluster_id),
+    "| stress-highlighted:", nrow(go_clusters_stress), "\n")
+```
+
 ## Outlier allele-frequency matrices (for the Fig 2 PCAs)
 
 ```{bash, eval = FALSE}
@@ -2382,12 +2456,14 @@ figS2
 
 ### Extract tier-specific sync files
 
-```{bash, eval=FALSE}
+```{bash}
 source activate CASE
 
 # Build per-tier position filters from the Significant.Loci files created in the
 # CON-filtering section. Each filter is a CHR/BP table used to subset the
 # full sync file.
+# NOTE: eval=TRUE (lightweight mawk subsetting of existing sync files). Must run
+# so the renamed Core/Conv/Priv .outlier.pca.sync files exist for the tier PCAs.
 
 # --- Core loci ---
 mawk '!/CHR/' Core.Significant.Loci | cut -f2,3 | sort | uniq > Core.pca.filter
@@ -2782,7 +2858,28 @@ fig5 <- ggplot(hm, aes(tx, theme, fill = treatment, alpha = n_terms)) +
   labs(x = NULL, y = NULL, title = "Mechanism by stressor — enriched GO terms per theme") +
   theme_case(14) + theme(panel.grid = element_blank(), plot.margin = margin(5, 5, 5, 5),
                          legend.position = "right")
+# Curated keyword-theme heatmap, demoted to a supplement now that Fig 3D uses the
+# data-driven clusters; kept for comparison.
+save_supp(fig5, "FigS11_curated_mechanism_heatmap.png", width = 11, height = 6)
 fig5
+```
+
+## 3.4b Mechanism panel D — data-driven stress GO clusters
+
+```{r fig3d-clusters, fig.width=8, fig.height=6}
+sm <- melt(go_clusters_stress[, .(cluster, CA, SE, CASE, minF)],
+           id.vars = c("cluster","minF"), variable.name = "Treatment", value.name = "n")
+sm[, cluster   := factor(cluster, levels = rev(go_clusters_stress[order(minF), cluster]))]
+sm[, Treatment := factor(Treatment, levels = c("CA","SE","CASE"))]
+fig3d <- ggplot(sm, aes(Treatment, cluster, fill = n)) +
+  geom_tile(colour = "white", linewidth = 0.6) +
+  geom_text(aes(label = n), size = 3.4, colour = "grey15") +
+  scale_fill_gradient(low = "grey92", high = "#0072B2", name = "enriched\nGO terms") +
+  labs(x = NULL, y = NULL, title = "Mechanism by stressor — data-driven GO clusters") +
+  theme_case(12) +
+  theme(panel.grid = element_blank(), axis.text.y = element_text(size = 9))
+save_case(fig3d, "Fig3D_GO_clusters.png", width = 8, height = 6)
+fig3d
 ```
 
 ## 3.5 Assemble Fig 3 (patchwork)
@@ -2806,7 +2903,7 @@ AAB
 AAB
 CDD
 "
-fig3 <- man_el + go_el + venn_combined + fig5 +
+fig3 <- man_el + go_el + venn_combined + fig3d +
   plot_layout(design = design3) +
   plot_annotation(tag_levels = "A") &
   theme(plot.title = element_text(size = 12))
@@ -3279,6 +3376,13 @@ if (nrow(go_all)) {
     }
   }
 }
+```
+
+## Table S — All data-driven GO clusters
+
+```{r tableS-go-clusters}
+knitr::kable(go_clusters_full,
+             caption = "Table S. Data-driven GO clusters (all terms; stress flag and per-stressor enrichment). Stress-relevant clusters are shown in Fig 3D.")
 ```
 
 ```{r session-info}
