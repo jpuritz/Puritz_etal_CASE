@@ -1999,6 +1999,15 @@ clG <- merge(clG, cl_sum[, .(cluster_id, cluster, stress, minF)], by = "cluster_
 
 go_clusters_full   <- clG[order(minF, Fisher), .(cluster, stress, GO, Term, Fisher, CA, SE, CASE)]
 go_clusters_stress <- cl_sum[stress == TRUE][order(minF), .(cluster, CA, SE, CASE, n, minF)]
+
+# all clusters x treatment and x tier (for Fig S9)
+go_clusters_trt <- clG[, .(CA = sum(CA), SE = sum(SE), CASE = sum(CASE),
+                           minF = minF[1L], stress = stress[1L]), by = cluster]
+.tier_ids <- function(o) if (exists(o) && !is.null(get(o))) unique(get(o)$GeneOntologyIDs) else character(0)
+tier_core <- .tier_ids("GO_Core_ALL"); tier_conv <- .tier_ids("GO_Conv_ALL"); tier_priv <- .tier_ids("GO_Priv_ALL")
+go_clusters_tier <- clG[, .(Core = sum(GO %in% tier_core), Convergent = sum(GO %in% tier_conv),
+                            Private = sum(GO %in% tier_priv), minF = minF[1L], stress = stress[1L]), by = cluster]
+
 fwrite(go_clusters_full,   file.path(tab_dir, "TableS_GO_clusters_full.csv"))
 fwrite(go_clusters_stress, file.path(tab_dir, "TableS_GO_clusters_stress.csv"))
 cat("data-driven clusters:", uniqueN(clG$cluster_id),
@@ -2150,7 +2159,7 @@ run_pca <- function(af_mat, title = "", point_size = 5, shape = 21) {
   mt <- t(as.matrix(af_mat))
   ok <- apply(mt, 2, function(col) all(is.finite(col)) && stats::var(col) > 0)
   mt <- mt[, ok, drop = FALSE]
-  pr <- prcomp(mt, center = TRUE, scale. = TRUE)
+  pr <- prcomp(mt, center = TRUE, scale. = FALSE)   # covariance PCA: let strongly-shifting outlier loci drive treatment separation
   ve <- pr$sdev^2 / sum(pr$sdev^2) * 100
   d  <- as.data.frame(pr$x[, 1:2]); names(d) <- c("PC1","PC2")
   nm <- rownames(mt)
@@ -2825,44 +2834,6 @@ venn_combined <- ggplot() +
 venn_combined
 ```
 
-## 3.4 Mechanism heatmap (curated themes + representative genes) — the original sketch
-
-```{r fig3-heatmap, fig.width=11, fig.height=6}
-theme_dt <- data.table(
-  theme = c("Cilium / microtubule motility","Ion transport / acid–base",
-            "Translation / ribosome","Mitochondria / oxidative",
-            "Ubiquitin–proteasome","Protein folding / chaperone",
-            "Apoptosis / stress response","DNA repair / replication"),
-  CA = c(7,11,10,2,5,0,1,0), SE = c(22,13,7,2,8,3,0,0), CASE = c(27,18,17,9,6,3,2,1),
-  genes = c("Tubulin β, tektins","NKA, proton pumps, amiloride channels","eIFs, Rps8/Rps4x",
-            "ATP-synthase β, SOD/GAPDH, MCU","IRE1/PERK/ATF6, eIF2α/ATF4 (ERAD)",
-            "HSP70/HSP90, Grp78, IAPs","IAPs, calpain","—"))
-theme_dt[, theme := factor(theme, levels = rev(theme))]
-# clean up stray double-spaces / space-before-comma in the gene-name annotations
-theme_dt[, genes := gsub("\\s+,", ",", genes)]
-theme_dt[, genes := gsub("\\s{2,}", " ", genes)]
-theme_dt[, genes := trimws(genes)]
-hm <- melt(theme_dt, id.vars = c("theme","genes"), variable.name = "treatment", value.name = "n_terms")
-hm[, tx := match(as.character(treatment), c("CA","SE","CASE"))]
-fig5 <- ggplot(hm, aes(tx, theme, fill = treatment, alpha = n_terms)) +
-  geom_tile(aes(width = 0.94, height = 0.94), colour = "white", linewidth = 0.6) +
-  geom_text(aes(label = n_terms), size = 4.2, colour = "grey10", alpha = 1) +
-  scale_fill_manual(values = treat_cols[c("CA","SE","CASE")], guide = "none") +
-  scale_alpha(range = c(0.12, 1), name = "GO terms") +
-  geom_text(data = unique(hm[, .(theme, genes)]), aes(x = 3.7, y = theme, label = genes),
-            hjust = 0, size = 3.8, colour = "grey25", inherit.aes = FALSE) +
-  # trimmed back down (6.2 -> 5.6): the right-side legend sits outside the panel, so
-  # this only controls trailing whitespace after the gene-name annotations
-  scale_x_continuous(breaks = 1:3, labels = c("CA","SE","CASE"), limits = c(0.5, 5.6)) +
-  coord_cartesian(clip = "off") +
-  labs(x = NULL, y = NULL, title = "Mechanism by stressor — enriched GO terms per theme") +
-  theme_case(14) + theme(panel.grid = element_blank(), plot.margin = margin(5, 5, 5, 5),
-                         legend.position = "right")
-# Curated keyword-theme heatmap, demoted to a supplement now that Fig 3D uses the
-# data-driven clusters; kept for comparison.
-save_supp(fig5, "FigS11_curated_mechanism_heatmap.png", width = 11, height = 6)
-fig5
-```
 
 ## 3.4b Mechanism panel D — data-driven stress GO clusters
 
@@ -2871,10 +2842,11 @@ sm <- melt(go_clusters_stress[, .(cluster, CA, SE, CASE, minF)],
            id.vars = c("cluster","minF"), variable.name = "Treatment", value.name = "n")
 sm[, cluster   := factor(cluster, levels = rev(go_clusters_stress[order(minF), cluster]))]
 sm[, Treatment := factor(Treatment, levels = c("CA","SE","CASE"))]
-fig3d <- ggplot(sm, aes(Treatment, cluster, fill = n)) +
+fig3d <- ggplot(sm, aes(Treatment, cluster, fill = Treatment, alpha = n)) +
   geom_tile(colour = "white", linewidth = 0.6) +
-  geom_text(aes(label = n), size = 3.4, colour = "grey15") +
-  scale_fill_gradient(low = "grey92", high = "#0072B2", name = "enriched\nGO terms") +
+  geom_text(aes(label = n), size = 3.4, colour = "grey15", alpha = 1) +
+  scale_fill_manual(values = c(CA = "#E69F00", SE = "#0072B2", CASE = "#009E73"), guide = "none") +
+  scale_alpha(range = c(0.15, 1), name = "enriched\nGO terms") +
   labs(x = NULL, y = NULL, title = "Mechanism by stressor — data-driven GO clusters") +
   theme_case(12) +
   theme(panel.grid = element_blank(), axis.text.y = element_text(size = 9))
@@ -3116,11 +3088,35 @@ venn_grob <- grid::grid.grabExpr({
     cat.col = cbPaletteSmall3, cex = 1.4, cat.cex = 1.5, margin = 0.08, ind = FALSE)
   grid::grid.draw(vp)
 })
-figS6 <- patchwork::wrap_elements(venn_grob) + p_theme_treat + p_theme_tier +
-  plot_layout(widths = c(1, 1.1, 1.1)) +
+# Panels B/C: data-driven cluster enrichment, all clusters, by stressor and by tier
+clev <- rev(go_clusters_trt[order(minF), cluster])
+bt <- melt(go_clusters_trt[, .(cluster, CA, SE, CASE)], id.vars = "cluster",
+           variable.name = "Treatment", value.name = "n")
+bt[, cluster := factor(cluster, levels = clev)]
+bt[, Treatment := factor(Treatment, levels = c("CA","SE","CASE"))]
+p_clust_trt <- ggplot(bt, aes(Treatment, cluster, fill = Treatment, alpha = n)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  geom_text(aes(label = n), size = 2.8, colour = "grey15", alpha = 1) +
+  scale_fill_manual(values = c(CA="#E69F00", SE="#0072B2", CASE="#009E73"), guide = "none") +
+  scale_alpha(range = c(0.12, 1), name = "GO terms") +
+  labs(x = NULL, y = NULL, title = "By stressor") +
+  theme_case(11) + theme(panel.grid = element_blank(), axis.text.y = element_text(size = 8))
+bk <- melt(go_clusters_tier[, .(cluster, Core, Convergent, Private)], id.vars = "cluster",
+           variable.name = "Tier", value.name = "n")
+bk[, cluster := factor(cluster, levels = clev)]
+bk[, Tier := factor(Tier, levels = c("Core","Convergent","Private"))]
+p_clust_tier <- ggplot(bk, aes(Tier, cluster, fill = Tier, alpha = n)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  geom_text(aes(label = n), size = 2.8, colour = "grey15", alpha = 1) +
+  scale_fill_manual(values = tier_cols[c("Core","Convergent","Private")], guide = "none") +
+  scale_alpha(range = c(0.12, 1), name = "GO terms") +
+  labs(x = NULL, y = NULL, title = "By tier") +
+  theme_case(11) + theme(panel.grid = element_blank(), axis.text.y = element_blank())
+figS6 <- patchwork::wrap_elements(venn_grob) + p_clust_trt + p_clust_tier +
+  plot_layout(widths = c(1, 1.1, 0.9)) +
   plot_annotation(tag_levels = "A",
-                  title = "Fig S9 — GO-term overlap and enriched biological themes")
-save_supp(figS6, "FigS9_GO_synthesis.png", width = 16, height = 6)
+                  title = "Fig S9 — GO-term overlap and data-driven cluster enrichment (by stressor and by tier)")
+save_supp(figS6, "FigS9_GO_synthesis.png", width = 16, height = 7)
 figS6
 ```
 
@@ -3378,11 +3374,11 @@ if (nrow(go_all)) {
 }
 ```
 
-## Table S — All data-driven GO clusters
+## Table 1 — All data-driven GO clusters (main text)
 
-```{r tableS-go-clusters}
+```{r table1-go-clusters}
 knitr::kable(go_clusters_full,
-             caption = "Table S. Data-driven GO clusters (all terms; stress flag and per-stressor enrichment). Stress-relevant clusters are shown in Fig 3D.")
+             caption = "Table 1. Data-driven GO clusters (all terms; stress flag and per-stressor enrichment). Stress-relevant clusters are shown in Fig 3D.")
 ```
 
 ```{r session-info}
