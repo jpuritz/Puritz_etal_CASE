@@ -1371,7 +1371,7 @@ write.table(bssig.CASE, "sig.priv.case", sep = "\t", row.names = FALSE, quote = 
 
 ```{bash}
 # ─── Per-tier sig.table files (mirrors sig.table for total) ──────────────────
-for TIER in Core Agg BS; do
+for TIER in Core Conv Priv; do
   TIER_LC="${TIER,,}"
   cat <(echo -e "SNP\tGroup") \
     <(mawk '{if (NR > 1) print $1"\tSE"}'   sig.${TIER_LC}.se  ) \
@@ -1500,7 +1500,7 @@ verify_col_indices("Total.Significant.Loci",         loci_expected)
 verify_col_indices("Total.Significant.Grouped.Loci", grouped_expected)
 message("Total: column indices verified")
 
-for (tier in c("Core", "Agg", "BS")) {
+for (tier in c("Core", "Conv", "Priv")) {
   verify_col_indices(paste0(tier, ".Significant.Loci"),         loci_expected)
   verify_col_indices(paste0(tier, ".Significant.Grouped.Loci"), grouped_expected)
   message(tier, ": column indices verified")
@@ -1543,7 +1543,7 @@ GENE_BED=~/CASE/analysis/sorted.ref3.0.gene.bed
 #                               col 14 = CHROM, col 15 = BP
 # Empty output files are expected for sparse tiers in some treatment categories.
 
-for TIER in Core Agg BS; do
+for TIER in Core Conv Priv; do
   LOCI="${TIER}.Significant.Loci"
 
   # CA (col 14)
@@ -1577,10 +1577,10 @@ GENE_BED=~/CASE/analysis/sorted.ref3.0.gene.bed
 # ─── Pairwise and triple-treatment LOC lists per tier ────────────────────────
 # Grouped.Loci column indices: col 11 = Sig.CASE, col 12 = Sig.CA, col 13 = Sig.SE
 #                              col 14 = CHROM, col 15 = BP
-# Core tier will have the most populated combination sets; Agg and BS
+# Core tier will have the most populated combination sets; Convergent and Private
 # output may be empty in some categories, which is expected and interpretable.
 
-for TIER in Core Agg BS; do
+for TIER in Core Conv Priv; do
   GLOCI="${TIER}.Significant.Grouped.Loci"
 
   # SE+CASE but not CA
@@ -1768,7 +1768,20 @@ run_topGO_analysis <- function(cand_gene_file, all_genes, gene2go_topgo, label) 
   # Create gene list
   GeneList <- factor(as.integer(all_genes %in% cand_genes))
   names(GeneList) <- all_genes
-  
+
+  # topGO's factor path requires both classes present (a 0/1 split). If no
+  # candidate gene falls in the annotated universe (or, degenerately, all do),
+  # the factor collapses to one level and new("topGOdata") errors with
+  # "allGenes must be a factor with 2 levels". Skip gracefully and return NULL
+  # (handled downstream), printing the count so the cause is visible on knit.
+  n_in <- sum(all_genes %in% cand_genes)
+  cat(paste0("Candidate genes in annotated universe: ", n_in, " of ", length(all_genes), "\n"))
+  if (nlevels(GeneList) < 2) {
+    cat(paste0("Skipping ", label, ": gene selection has <2 levels (",
+               n_in, " candidates in universe) -- not testable.\n"))
+    return(NULL)
+  }
+
   # Separate GO terms for gene-level mapping later
   cand_gene2go_sep <- cand_gene2go %>%
     separate_rows(GeneOntologyIDs, sep = ";")
@@ -2486,7 +2499,7 @@ run_tier_pca <- function(sync_file, tier_label, out_prefix) {
 ### Run all-samples PCA for each tier
 
 ```{r}
-# All three tiers run across all 56 samples; block-restrict Agg/BS later
+# All three tiers run across all 56 samples; block-restrict Convergent/Private later
 # if the all-block PCA is uninformative.
 pca.core <- run_tier_pca("Core.outlier.pca.sync",  "Core Loci",           "PC_Core")
 pca.conv  <- run_tier_pca("Conv.outlier.pca.sync",   "Convergent Loci",     "PC_Conv")
