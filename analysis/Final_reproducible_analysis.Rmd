@@ -2147,7 +2147,7 @@ if (have_dAF) {
     guides(fill = "none",  # Panel A: Spawn legend only; colour keys to spawn so it merges with Panel G's
            shape = guide_legend(override.aes = list(fill = unname(spawn_cols)))) +
     labs(x = sprintf("PC1 (%.1f%%)", ve[1]), y = sprintf("PC2 (%.1f%%)", ve[2]),
-         title = "Outlier loci — ΔAF from initial") +
+         title = "Outlier loci — ΔAF from initial, all blocks") +
     theme_case(13)
 } else message("input.all.outlier.af not found — ΔAF PCA skipped.")
 pca_dAF
@@ -2743,7 +2743,7 @@ if (!is.null(go_dir) && all(file.exists(file.path(go_dir, go_files)))) {
   # facet panels are guaranteed equal-width and fill the plot area, avoiding the
   # wrap_elements() sizing issues we kept hitting with a 3-plot stack.
   label_df <- data.table(stressor = factor(c("CA","SE","CASE"), levels = c("CA","SE","CASE")),
-                          x = -Inf, y = Inf, lab = c("CA Enriched GO Terms (all spawns)","SE Enriched GO Terms (all spawns)","CASE Enriched GO Terms (all spawns)"))
+                          x = -Inf, y = Inf, lab = c("CA Enriched GO Terms (all blocks)","SE Enriched GO Terms (all blocks)","CASE Enriched GO Terms (all blocks)"))
   go_panel <- ggplot(godat, aes(x, neglogp)) +
     geom_vline(xintercept = sep_x, linetype = "dashed", colour = "grey80", linewidth = 0.4) +
     geom_point(aes(shape = cat, fill = stressor), size = 1.8, alpha = 0.65, color= "black") +
@@ -2864,7 +2864,6 @@ fig3d <- ggplot(sm, aes(Treatment, cluster, fill = Treatment, alpha = n)) +
   labs(x = NULL, y = NULL, title = "Mechanism by stressor — data-driven GO clusters") +
   theme_case(12) +
   theme(panel.grid = element_blank(), axis.text.y = element_text(size = 9))
-save_case(fig3d, "Fig3D_GO_clusters.png", width = 8, height = 6)
 fig3d
 ```
 
