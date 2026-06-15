@@ -2890,7 +2890,7 @@ figS4
 One figure per category (ALL / CA / SE / CASE); the curated subset is in Fig 3.
 
 ```{r figS7-go-full, fig.width=10, fig.height=12}
-go_dir2 <- "../GO"
+go_dir2 <- "./GO"
 go_full_files  <- c(ALL = "ALL_GO_en_sig_gene.csv", CA = "CA_GO_en_sig_gene.csv",
                    SE = "SE_GO_en_sig_gene.csv", CASE = "CASE_GO_en_sig_gene.csv")
 go_full_labels <- c(ALL = "All Outlier Loci", CA = "CA Stressor", SE = "SE Stressor",
@@ -3296,7 +3296,7 @@ write.csv(as.data.frame(grouped_total.sig),
 
 # Table S3 — GO enrichment (per-stressor topGO results, combined)
 go_all <- rbindlist(lapply(c("ALL","CA","SE","CASE"), function(tr) {
-  d <- fread(file.path("../GO", paste0(tr, "_GO_en_sig_gene.csv"))); d$stressor <- tr; d
+  d <- fread(file.path("./GO", paste0(tr, "_GO_en_sig_gene.csv"))); d$stressor <- tr; d
 }), fill = TRUE)
 fwrite(go_all, file.path(tab_dir, "TableS3_GO_enrichment.csv"))
 
