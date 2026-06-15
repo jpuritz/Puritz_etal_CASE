@@ -2172,14 +2172,28 @@ run_pca <- function(af_mat, title = "", point_size = 5, shape = 21) {
     theme_case(13)
 }
 block_pcas <- list()
+pos_files <- c(B10 = "B10.pos", B11 = "B11.pos", B12 = "B12.pos")
 if (exists("input.all.outlier.block.af")) {
   src <- input.all.outlier.block.af; colnames(src) <- trimws(colnames(src))
   for (b in blocks) {
     idx <- grep(paste0("_", b, "$"), colnames(src))
+    # Restrict to loci that passed THIS block's coverage/MAF filter (its .pos file),
+    # so low-coverage / near-invariant loci absent from the block aren't carried in
+    # (matches CASE_FULL_FINAL.Rmd). Locus IDs are CHROM.POS, as in the af() rownames.
+    rows <- rep(TRUE, nrow(src))
+    pf <- pos_files[[b]]
+    if (!is.null(pf) && file.exists(pf)) {
+      pos <- read.table(pf, header = FALSE, stringsAsFactors = FALSE)
+      keep_loci <- paste(pos[, 1], pos[, 2], sep = ".")
+      rows <- rownames(src) %in% keep_loci
+      cat(sprintf("  %s: %d of %d outlier loci retained by .pos filter\n", b, sum(rows), nrow(src)))
+    } else {
+      message("Block .pos file not found for ", b, "; using all outlier loci.")
+    }
     # each block PCA uses that spawn's shape (matches Panel A). Only B10 (Panel B) keeps the
     # Treatment legend; B11/B12 (Panels C/D) have none.
-    if (length(idx) >= 3) {
-      p <- run_pca(src[, idx, drop = FALSE], paste0("Outlier loci — ", b), shape = spawn_shapes[[b]])
+    if (length(idx) >= 3 && sum(rows) >= 2) {
+      p <- run_pca(src[rows, idx, drop = FALSE], paste0("Outlier loci — ", b), shape = spawn_shapes[[b]])
       # use guides(fill = "none") rather than theme(legend.position = "none"): the latter
       # gets overridden by the figure-wide `& theme(...)` call in fig2-assemble, while
       # guides() is layer-level and survives.
