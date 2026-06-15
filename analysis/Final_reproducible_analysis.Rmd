@@ -976,14 +976,14 @@ Qvalue_convert(AB.pval.table) -> AB.pv
 #          that are also differentiating in the control (likely artifacts or
 #          family effects rather than treatment-driven selection)
 #
-# Per-block alpha corrections (applied to Aggregate and Block-Specific tiers):
+# Per-block alpha corrections (applied to Convergent and Private tiers):
 #   B10.alpha = 0.001 — 10x stricter than base; B10 p-values are inflated by
 #               genetic drift from fewer spawning broodstock, so a tighter
 #               threshold is needed to prevent B10 from dominating non-core tiers.
 #   B11.alpha = 0.1   — 10x looser than base; B11 has lower coverage and fewer
 #               loci, so statistical power is reduced and the threshold is relaxed.
 #   Core tiers (Tier A/B) do not apply these corrections because requiring signal
-#   across multiple independent blocks already controls for block-specific drift.
+#   across multiple independent blocks already controls for private drift.
 
 # ── Helper: apply_treatment_filter ───────────────────────────────────────────
 # After subsetting to SNPs significant for one treatment, zero out the Sig.*
@@ -1084,7 +1084,7 @@ multi_sig <- rbind(multi_sig.CA, multi_sig.CASE, multi_sig.SE)
 write.table(multi_sig, "Sig.Loci.2", sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ── Per-block q < 0.01 intermediates ─────────────────────────────────────────
-# ppsig3.FDR01 feeds BLOCK-SPECIFIC TIER and AGGREGATE TIER:
+# ppsig3.FDR01 feeds PRIVATE TIER and CONVERGENT TIER:
 alpha  <- 0.01
 alpha2 <- 0.10
 B11.alpha <- 0.1  # Block 11 correction: 0.1
@@ -1105,7 +1105,7 @@ write.table(ppsig.B11.01,    "Sig.Loci.FDR01.Block11",  sep = "\t", row.names = 
 write.table(ppsig.B12.01,    "Sig.Loci.FDR01.Block12",  sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOCK-SPECIFIC TIER: block-specific alpha thresholds AND top 1% of q-values
+# PRIVATE TIER: private alpha thresholds AND top 1% of q-values
 # ══════════════════════════════════════════════════════════════════════════════
 # top1pct_filter selects the top 1% strongest signals among already-significant
 # loci (quantile computed on CON-clean subset; QCON > 0.1).
@@ -1124,37 +1124,37 @@ singleton   <- read.table("singleton.loci",         header = TRUE)
 sing.lowvar <- read.table("singleton.loci.lowvar",  header = TRUE)
 sing.lowcov <- read.table("singleton.loci.lowcov",  header = TRUE)
 
-BS_all       <- rbind(ppsig.B10, ppsig.B11, ppsig.B12)
-ppsig1.s        <- semi_join(BS_all, singleton,   by = "SNP")
-ppsig1.s.lowvar <- semi_join(BS_all, sing.lowvar, by = "SNP")
-ppsig1.s.lowcov <- semi_join(BS_all, sing.lowcov, by = "SNP")
+Priv_all       <- rbind(ppsig.B10, ppsig.B11, ppsig.B12)
+ppsig1.s        <- semi_join(Priv_all, singleton,   by = "SNP")
+ppsig1.s.lowvar <- semi_join(Priv_all, sing.lowvar, by = "SNP")
+ppsig1.s.lowcov <- semi_join(Priv_all, sing.lowcov, by = "SNP")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AGGREGATE TIER: per-block q < 0.01 in ≥1 block AND q < 0.0001 in all-blocks (AB)
+# CONVERGENT TIER: per-block q < 0.01 in ≥1 block AND q < 0.0001 in all-blocks (AB)
 # ══════════════════════════════════════════════════════════════════════════════
 # These loci have modest per-block signal that cross-validates against the
-# pooled all-blocks analysis. Detected in aggregate rather than any single
+# pooled all-blocks analysis. Detected only in the pooled across-spawn analysis rather than any single
 # spawning block — indicating consistent but weak selection below individual-block
 # detection power. BLOCK 33 is a dummy identifier for the AB dataset.
 ppsig1.ab       <- Significat_subset(AB.pv, 0.0001, alpha2)
 ppsig1.ab$BLOCK <- 33
 
-agg.SE <- bind_rows(subset(ppsig3.FDR01, Sig.SE   == TRUE),
+conv.SE <- bind_rows(subset(ppsig3.FDR01, Sig.SE   == TRUE),
                     subset(ppsig1.ab,    Sig.SE   == TRUE)) %>%
           group_by(SNP) %>% filter(n() > 1) %>%
           apply_treatment_filter("Sig.SE")
 
-agg.CASE <- bind_rows(subset(ppsig3.FDR01, Sig.CASE == TRUE),
+conv.CASE <- bind_rows(subset(ppsig3.FDR01, Sig.CASE == TRUE),
                       subset(ppsig1.ab,    Sig.CASE == TRUE)) %>%
             group_by(SNP) %>% filter(n() > 1) %>%
             apply_treatment_filter("Sig.CASE")
 
-agg.CA <- bind_rows(subset(ppsig3.FDR01, Sig.CA   == TRUE),
+conv.CA <- bind_rows(subset(ppsig3.FDR01, Sig.CA   == TRUE),
                     subset(ppsig1.ab,    Sig.CA   == TRUE)) %>%
           group_by(SNP) %>% filter(n() > 1) %>%
           apply_treatment_filter("Sig.CA")
 
-aggregate.sig <- bind_rows(agg.SE, agg.CASE, agg.CA)
+convergent.sig <- bind_rows(conv.SE, conv.CASE, conv.CA)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CON FILTER
@@ -1169,7 +1169,7 @@ write.table(all_con, "ALL.CON.SNPS", sep = "\t", row.names = FALSE, quote = FALS
 # FINAL UNION: all three tiers combined, CON-filtered
 # ══════════════════════════════════════════════════════════════════════════════
 total.sig <- anti_join(
-  bind_rows(all_sig, multi_sig, aggregate.sig, ppsig1.s),
+  bind_rows(all_sig, multi_sig, convergent.sig, ppsig1.s),
   all_con,
   by = "SNP"
 )
@@ -1178,18 +1178,18 @@ write.table(total.sig, "Total.Significant.uf.Loci", sep = "\t", row.names = FALS
 # ══════════════════════════════════════════════════════════════════════════════
 # THREE-WAY SPLIT of significant loci
 # ══════════════════════════════════════════════════════════════════════════════
-# Tiers are assigned hierarchically (Core > Aggregate > Block-Specific) so that
+# Tiers are assigned hierarchically (Core > Convergent > Private) so that
 # each locus appears in exactly one tier.
 #
-# Exception: low-variation singletons that appear in the Aggregate candidates
-# are reclassified as Block-Specific. For these loci the Aggregate all-blocks
+# Exception: low-variation singletons that appear in the Convergent candidates
+# are reclassified as Private. For these loci the Convergent all-blocks
 # signal is driven by a single polymorphic spawn — the other two blocks are
 # near-fixed (MAF < 0.015), so the AB result is not cross-block validation.
-# bs_source records whether a Block-Specific locus originated from the
-# Aggregate candidates ("Aggregate") or directly from per-block outlier filtering ("Single").
+# priv_source records whether a Private locus originated from the
+# Convergent candidates ("Convergent") or directly from per-block outlier filtering ("Single").
 
 # Core (Tiers A and B): strong replicated signal across multiple independent
-# spawning blocks. Consistent response regardless of block-specific variation
+# spawning blocks. Consistent response regardless of private variation
 # in effluent composition or larval pool standing genetic variation.
 core.sig <- anti_join(
   bind_rows(all_sig, multi_sig),
@@ -1198,33 +1198,33 @@ core.sig <- anti_join(
 )
 write.table(core.sig, "Sig.Loci.Core", sep = "\t", row.names = FALSE, quote = FALSE)
 
-# Aggregate: Core excluded first; then lowvar singletons split off to Block-Specific.
+# Convergent: Core excluded first; then lowvar singletons split off to Private.
 # Remaining loci cross-validate a per-block signal against the all-blocks analysis
 # across spawns with adequate MAF — genuine weak consistent selection.
-agg_candidates <- anti_join(aggregate.sig, core.sig, by = "SNP")
-agg_to_bs      <- semi_join(agg_candidates, sing.lowvar, by = "SNP") %>%
+conv_candidates <- anti_join(convergent.sig, core.sig, by = "SNP")
+conv_to_priv      <- semi_join(conv_candidates, sing.lowvar, by = "SNP") %>%
                   anti_join(all_con, by = "SNP") %>%
-                  mutate(bs_source = "Aggregate")
-aggregate.sig  <- anti_join(agg_candidates, sing.lowvar, by = "SNP") %>%
+                  mutate(priv_source = "Convergent")
+convergent.sig  <- anti_join(conv_candidates, sing.lowvar, by = "SNP") %>%
                   anti_join(all_con, by = "SNP")
-write.table(aggregate.sig, "Sig.Loci.Aggregate", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(convergent.sig, "Sig.Loci.Convergent", sep = "\t", row.names = FALSE, quote = FALSE)
 
-# Block-Specific: two sources combined, annotated by bs_source.
+# Private: two sources combined, annotated by priv_source.
 # "Single"    — top-5% per-block outliers among singleton loci (testable in 1–2 blocks
 #               only due to low coverage or near-fixation in absent spawns).
-# "Aggregate" — lowvar singletons reclassified from Aggregate: near-fixed in absent
+# "Convergent" — lowvar singletons reclassified from Convergent: near-fixed in absent
 #               blocks, so AB signal was single-spawn-driven rather than cross-validated.
-bs_single <- anti_join(
+priv_single <- anti_join(
   anti_join(
     anti_join(ppsig1.s, core.sig, by = "SNP"),
-    aggregate.sig, by = "SNP"
+    convergent.sig, by = "SNP"
   ),
   all_con,
   by = "SNP"
-) %>% mutate(bs_source = "Single")
+) %>% mutate(priv_source = "Single")
 
-block.specific <- bind_rows(bs_single, agg_to_bs)
-write.table(block.specific, "Sig.Loci.Block-Specific", sep = "\t", row.names = FALSE, quote = FALSE)
+private.sig <- bind_rows(priv_single, conv_to_priv)
+write.table(private.sig, "Sig.Loci.Private", sep = "\t", row.names = FALSE, quote = FALSE)
 ```
 ### Proximity Control Loci filter
 ```{bash}
@@ -1275,8 +1275,8 @@ source activate CASE
 
 # ─── bedtools CON-filtering for each locus tier ──────────────────────────────
 # con.loci.filter.bed (built above from ALL.CON.SNPS x gene model) is
-# reference-derived and applies equally to all tiers. core.sig, aggregate.sig,
-# and block.specific were already R-level filtered with anti_join(... , all_con);
+# reference-derived and applies equally to all tiers. core.sig, convergent.sig,
+# and private.sig were already R-level filtered with anti_join(... , all_con);
 # this step removes any remaining loci overlapping CON-associated gene regions.
 
 # Core (Tiers A and B: strong replicated signal across multiple blocks)
@@ -1286,19 +1286,19 @@ cat <(echo -e "SNP\tCHROM\tBP") \
   <(bedtools intersect -a Core.loci.bed -b con.loci.filter.bed | \
     mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Core.Loci.txt
 
-# Aggregate (q<0.01 per-block AND q<0.0001 all-blocks; consistent weak signal)
-cut -f2,3 Sig.Loci.Aggregate | tail -n +2 | sort -k1,2 | uniq | \
-  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Agg.loci.bed
+# Convergent (q<0.01 per-block AND q<0.0001 all-blocks; consistent weak signal)
+cut -f2,3 Sig.Loci.Convergent | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Conv.loci.bed
 cat <(echo -e "SNP\tCHROM\tBP") \
-  <(bedtools intersect -a Agg.loci.bed -b con.loci.filter.bed | \
-    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Agg.Loci.txt
+  <(bedtools intersect -a Conv.loci.bed -b con.loci.filter.bed | \
+    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Conv.Loci.txt
 
-# Block-Specific (top 5% outliers among singletons; filename quoted due to hyphen)
-cut -f2,3 "Sig.Loci.Block-Specific" | tail -n +2 | sort -k1,2 | uniq | \
-  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > BS.loci.bed
+# Private (top 5% outliers among singletons; filename quoted due to hyphen)
+cut -f2,3 "Sig.Loci.Private" | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Priv.loci.bed
 cat <(echo -e "SNP\tCHROM\tBP") \
-  <(bedtools intersect -a BS.loci.bed -b con.loci.filter.bed | \
-    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.BS.Loci.txt
+  <(bedtools intersect -a Priv.loci.bed -b con.loci.filter.bed | \
+    mawk '{print $1"_"$3"\t"$1"\t"$3}') > ToFilter.Con.Priv.Loci.txt
 ```
 
 ```{r}
@@ -1315,22 +1315,22 @@ grouped_core.sig <- group_and_average(core.sig)
 write.table(grouped_core.sig, "Core.Significant.Grouped.Loci",
             sep = "\t", row.names = FALSE, quote = FALSE)
 
-# Aggregate
-con_filter.agg <- read.table("ToFilter.Con.Agg.Loci.txt", header = TRUE)
-aggregate.sig <- unique(anti_join(aggregate.sig, con_filter.agg, by = "SNP"))
-write.table(aggregate.sig, "Agg.Significant.Loci",
+# Convergent
+con_filter.conv <- read.table("ToFilter.Con.Conv.Loci.txt", header = TRUE)
+convergent.sig <- unique(anti_join(convergent.sig, con_filter.conv, by = "SNP"))
+write.table(convergent.sig, "Conv.Significant.Loci",
             sep = "\t", row.names = FALSE, quote = FALSE)
-grouped_aggregate.sig <- group_and_average(aggregate.sig)
-write.table(grouped_aggregate.sig, "Agg.Significant.Grouped.Loci",
+grouped_convergent.sig <- group_and_average(convergent.sig)
+write.table(grouped_convergent.sig, "Conv.Significant.Grouped.Loci",
             sep = "\t", row.names = FALSE, quote = FALSE)
 
-# Block-Specific
-con_filter.bs <- read.table("ToFilter.Con.BS.Loci.txt", header = TRUE)
-block.specific <- unique(anti_join(block.specific, con_filter.bs, by = "SNP"))
-write.table(block.specific, "BS.Significant.Loci",
+# Private
+con_filter.priv <- read.table("ToFilter.Con.Priv.Loci.txt", header = TRUE)
+private.sig <- unique(anti_join(private.sig, con_filter.priv, by = "SNP"))
+write.table(private.sig, "Priv.Significant.Loci",
             sep = "\t", row.names = FALSE, quote = FALSE)
-grouped_block.specific <- group_and_average(block.specific)
-write.table(grouped_block.specific, "BS.Significant.Grouped.Loci",
+grouped_private.sig <- group_and_average(private.sig)
+write.table(grouped_private.sig, "Priv.Significant.Grouped.Loci",
             sep = "\t", row.names = FALSE, quote = FALSE)
 
 # ─── Per-treatment splits for each tier ──────────────────────────────────────
@@ -1348,25 +1348,25 @@ write.table(coresig.SE,   "sig.core.se",   sep = "\t", row.names = FALSE, quote 
 write.table(coresig.both, "sig.core.both", sep = "\t", row.names = FALSE, quote = FALSE)
 write.table(coresig.CASE, "sig.core.case", sep = "\t", row.names = FALSE, quote = FALSE)
 
-# Aggregate
-aggsig.CA   <- subset(aggregate.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
-aggsig.SE   <- subset(aggregate.sig, Sig.CA == FALSE & Sig.SE == TRUE)
-aggsig.both <- subset(aggregate.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
-aggsig.CASE <- subset(aggregate.sig, Sig.CASE == TRUE)
-write.table(aggsig.CA,   "sig.agg.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(aggsig.SE,   "sig.agg.se",   sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(aggsig.both, "sig.agg.both", sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(aggsig.CASE, "sig.agg.case", sep = "\t", row.names = FALSE, quote = FALSE)
+# Convergent
+convsig.CA   <- subset(convergent.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
+convsig.SE   <- subset(convergent.sig, Sig.CA == FALSE & Sig.SE == TRUE)
+convsig.both <- subset(convergent.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
+convsig.CASE <- subset(convergent.sig, Sig.CASE == TRUE)
+write.table(convsig.CA,   "sig.conv.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(convsig.SE,   "sig.conv.se",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(convsig.both, "sig.conv.both", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(convsig.CASE, "sig.conv.case", sep = "\t", row.names = FALSE, quote = FALSE)
 
-# Block-Specific
-bssig.CA   <- subset(block.specific, Sig.CA == TRUE  & Sig.SE == FALSE)
-bssig.SE   <- subset(block.specific, Sig.CA == FALSE & Sig.SE == TRUE)
-bssig.both <- subset(block.specific, Sig.CA == TRUE  & Sig.SE == TRUE)
-bssig.CASE <- subset(block.specific, Sig.CASE == TRUE)
-write.table(bssig.CA,   "sig.bs.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(bssig.SE,   "sig.bs.se",   sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(bssig.both, "sig.bs.both", sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(bssig.CASE, "sig.bs.case", sep = "\t", row.names = FALSE, quote = FALSE)
+# Private
+bssig.CA   <- subset(private.sig, Sig.CA == TRUE  & Sig.SE == FALSE)
+bssig.SE   <- subset(private.sig, Sig.CA == FALSE & Sig.SE == TRUE)
+bssig.both <- subset(private.sig, Sig.CA == TRUE  & Sig.SE == TRUE)
+bssig.CASE <- subset(private.sig, Sig.CASE == TRUE)
+write.table(bssig.CA,   "sig.priv.ca",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(bssig.SE,   "sig.priv.se",   sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(bssig.both, "sig.priv.both", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(bssig.CASE, "sig.priv.case", sep = "\t", row.names = FALSE, quote = FALSE)
 ```
 
 ```{bash}
@@ -1520,15 +1520,15 @@ cut -f2,3 Core.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
 bedtools intersect -wb -a Core.Significant.loci.bed -b $GENE_BED | \
   grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.Core.TOTAL.LOC
 
-cut -f2,3 BS.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
-  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > BS.Significant.loci.bed
-bedtools intersect -wb -a BS.Significant.loci.bed -b $GENE_BED | \
-  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.BS.TOTAL.LOC
+cut -f2,3 Priv.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Priv.Significant.loci.bed
+bedtools intersect -wb -a Priv.Significant.loci.bed -b $GENE_BED | \
+  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.Priv.TOTAL.LOC
 
-cut -f2,3 Agg.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
-  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Agg.Significant.loci.bed
-bedtools intersect -wb -a Agg.Significant.loci.bed -b $GENE_BED | \
-  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.Agg.TOTAL.LOC
+cut -f2,3 Conv.Significant.Loci | tail -n +2 | sort -k1,2 | uniq | \
+  mawk '{print $1 "\t" $2-1 "\t" $2}' | bedtools sort -i - > Conv.Significant.loci.bed
+bedtools intersect -wb -a Conv.Significant.loci.bed -b $GENE_BED | \
+  grep -oh "gene=LOC.*;g" | sed 's/gene=//g' | sed 's/;g//g' | sort | uniq > Sig.loci.Conv.TOTAL.LOC
 ```
 
 ```{bash}
@@ -1710,33 +1710,33 @@ awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Core_SE_cand_genes_GO.t
 grep -F -f ../Sig.loci.Core.CASE.LOC   gene2go_full.tab > Core_CASE_cand_genes_GO.tab
 awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Core_CASE_cand_genes_GO.tab > Core_CASE_cand_genes_GO_head.tab
 
-# --- Block-Specific loci ---
-grep -F -f ../Sig.loci.BS.TOTAL.LOC    gene2go_full.tab > BS_ALL_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_ALL_cand_genes_GO.tab    > BS_ALL_cand_genes_GO_head.tab
+# --- Private loci ---
+grep -F -f ../Sig.loci.Priv.TOTAL.LOC    gene2go_full.tab > Priv_ALL_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Priv_ALL_cand_genes_GO.tab    > Priv_ALL_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.BS.CA.LOC       gene2go_full.tab > BS_CA_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_CA_cand_genes_GO.tab     > BS_CA_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Priv.CA.LOC       gene2go_full.tab > Priv_CA_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Priv_CA_cand_genes_GO.tab     > Priv_CA_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.BS.SE.LOC       gene2go_full.tab > BS_SE_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_SE_cand_genes_GO.tab     > BS_SE_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Priv.SE.LOC       gene2go_full.tab > Priv_SE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Priv_SE_cand_genes_GO.tab     > Priv_SE_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.BS.CASE.LOC     gene2go_full.tab > BS_CASE_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' BS_CASE_cand_genes_GO.tab   > BS_CASE_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Priv.CASE.LOC     gene2go_full.tab > Priv_CASE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Priv_CASE_cand_genes_GO.tab   > Priv_CASE_cand_genes_GO_head.tab
 
-# --- Aggregate loci (per-block + all-blocks cross-validated) ---
-# Note: these files may be empty if aggregate loci map to no annotated genes;
+# --- Convergent loci (per-block + all-blocks cross-validated) ---
+# Note: these files may be empty if convergent loci map to no annotated genes;
 # downstream R code handles empty input gracefully via run_topGO_analysis().
-grep -F -f ../Sig.loci.Agg.TOTAL.LOC  gene2go_full.tab > Agg_ALL_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Agg_ALL_cand_genes_GO.tab  > Agg_ALL_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Conv.TOTAL.LOC  gene2go_full.tab > Conv_ALL_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Conv_ALL_cand_genes_GO.tab  > Conv_ALL_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.Agg.CA.LOC     gene2go_full.tab > Agg_CA_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Agg_CA_cand_genes_GO.tab   > Agg_CA_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Conv.CA.LOC     gene2go_full.tab > Conv_CA_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Conv_CA_cand_genes_GO.tab   > Conv_CA_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.Agg.SE.LOC     gene2go_full.tab > Agg_SE_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Agg_SE_cand_genes_GO.tab   > Agg_SE_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Conv.SE.LOC     gene2go_full.tab > Conv_SE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Conv_SE_cand_genes_GO.tab   > Conv_SE_cand_genes_GO_head.tab
 
-grep -F -f ../Sig.loci.Agg.CASE.LOC   gene2go_full.tab > Agg_CASE_cand_genes_GO.tab
-awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Agg_CASE_cand_genes_GO.tab > Agg_CASE_cand_genes_GO_head.tab
+grep -F -f ../Sig.loci.Conv.CASE.LOC   gene2go_full.tab > Conv_CASE_cand_genes_GO.tab
+awk 'BEGIN {print "gene_name\tGeneOntologyIDs"} {print}' Conv_CASE_cand_genes_GO.tab > Conv_CASE_cand_genes_GO_head.tab
 ```
 
 ### Load libraries and gene-to-GO data
@@ -1867,24 +1867,24 @@ GO_Core_SE   <- run_topGO_analysis("./GO/Core_SE_cand_genes_GO_head.tab",   all_
 GO_Core_CASE <- run_topGO_analysis("./GO/Core_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Core: CASE")
 ```
 
-### Run GO enrichment for Block-Specific loci
+### Run GO enrichment for Private loci
 
 ```{r}
-# Block-Specific loci: per-block outlier singletons and reclassified Aggregate loci
-GO_BS_ALL  <- run_topGO_analysis("./GO/BS_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Block-Specific: All Outliers")
-GO_BS_CA   <- run_topGO_analysis("./GO/BS_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Block-Specific: CA")
-GO_BS_SE   <- run_topGO_analysis("./GO/BS_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Block-Specific: SE")
-GO_BS_CASE <- run_topGO_analysis("./GO/BS_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Block-Specific: CASE")
+# Private loci: per-block outlier singletons and reclassified Convergent loci
+GO_Priv_ALL  <- run_topGO_analysis("./GO/Priv_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Private: All Outliers")
+GO_Priv_CA   <- run_topGO_analysis("./GO/Priv_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Private: CA")
+GO_Priv_SE   <- run_topGO_analysis("./GO/Priv_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Private: SE")
+GO_Priv_CASE <- run_topGO_analysis("./GO/Priv_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Private: CASE")
 ```
 
-### Run GO enrichment for Aggregate loci
+### Run GO enrichment for Convergent loci
 
 ```{r}
-# Aggregate loci: per-block + all-blocks cross-validated; may return NULL if too few annotated genes
-GO_Agg_ALL  <- run_topGO_analysis("./GO/Agg_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Aggregate: All Outliers")
-GO_Agg_CA   <- run_topGO_analysis("./GO/Agg_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Aggregate: CA")
-GO_Agg_SE   <- run_topGO_analysis("./GO/Agg_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Aggregate: SE")
-GO_Agg_CASE <- run_topGO_analysis("./GO/Agg_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Aggregate: CASE")
+# Convergent loci: per-block + all-blocks cross-validated; may return NULL if too few annotated genes
+GO_Conv_ALL  <- run_topGO_analysis("./GO/Conv_ALL_cand_genes_GO_head.tab",  all_genes, gene2go_topgo, "Convergent: All Outliers")
+GO_Conv_CA   <- run_topGO_analysis("./GO/Conv_CA_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Convergent: CA")
+GO_Conv_SE   <- run_topGO_analysis("./GO/Conv_SE_cand_genes_GO_head.tab",   all_genes, gene2go_topgo, "Convergent: SE")
+GO_Conv_CASE <- run_topGO_analysis("./GO/Conv_CASE_cand_genes_GO_head.tab", all_genes, gene2go_topgo, "Convergent: CASE")
 ```
 
 ### Save results
@@ -1905,17 +1905,17 @@ if(!is.null(GO_Core_CA))   write.csv(GO_Core_CA,   "./GO/Core_CA_GO_en_sig_gene.
 if(!is.null(GO_Core_SE))   write.csv(GO_Core_SE,   "./GO/Core_SE_GO_en_sig_gene.csv",   row.names = FALSE)
 if(!is.null(GO_Core_CASE)) write.csv(GO_Core_CASE, "./GO/Core_CASE_GO_en_sig_gene.csv", row.names = FALSE)
 
-# Block-Specific
-if(!is.null(GO_BS_ALL))  write.csv(GO_BS_ALL,  "./GO/BS_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
-if(!is.null(GO_BS_CA))   write.csv(GO_BS_CA,   "./GO/BS_CA_GO_en_sig_gene.csv",   row.names = FALSE)
-if(!is.null(GO_BS_SE))   write.csv(GO_BS_SE,   "./GO/BS_SE_GO_en_sig_gene.csv",   row.names = FALSE)
-if(!is.null(GO_BS_CASE)) write.csv(GO_BS_CASE, "./GO/BS_CASE_GO_en_sig_gene.csv", row.names = FALSE)
+# Private
+if(!is.null(GO_Priv_ALL))  write.csv(GO_Priv_ALL,  "./GO/Priv_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
+if(!is.null(GO_Priv_CA))   write.csv(GO_Priv_CA,   "./GO/Priv_CA_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Priv_SE))   write.csv(GO_Priv_SE,   "./GO/Priv_SE_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Priv_CASE)) write.csv(GO_Priv_CASE, "./GO/Priv_CASE_GO_en_sig_gene.csv", row.names = FALSE)
 
-# Aggregate
-if(!is.null(GO_Agg_ALL))  write.csv(GO_Agg_ALL,  "./GO/Agg_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
-if(!is.null(GO_Agg_CA))   write.csv(GO_Agg_CA,   "./GO/Agg_CA_GO_en_sig_gene.csv",   row.names = FALSE)
-if(!is.null(GO_Agg_SE))   write.csv(GO_Agg_SE,   "./GO/Agg_SE_GO_en_sig_gene.csv",   row.names = FALSE)
-if(!is.null(GO_Agg_CASE)) write.csv(GO_Agg_CASE, "./GO/Agg_CASE_GO_en_sig_gene.csv", row.names = FALSE)
+# Convergent
+if(!is.null(GO_Conv_ALL))  write.csv(GO_Conv_ALL,  "./GO/Conv_ALL_GO_en_sig_gene.csv",  row.names = FALSE)
+if(!is.null(GO_Conv_CA))   write.csv(GO_Conv_CA,   "./GO/Conv_CA_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Conv_SE))   write.csv(GO_Conv_SE,   "./GO/Conv_SE_GO_en_sig_gene.csv",   row.names = FALSE)
+if(!is.null(GO_Conv_CASE)) write.csv(GO_Conv_CASE, "./GO/Conv_CASE_GO_en_sig_gene.csv", row.names = FALSE)
 ```
 
 ## Outlier allele-frequency matrices (for the Fig 2 PCAs)
@@ -1963,7 +1963,7 @@ asL    <- function(x) as.logical(x)   # tolerate logical OR "TRUE"/"FALSE" chara
 ```{r guard}
 need <- c(as.vector(outer(c("ca","case","se","con"), c("b10","b11","b12"),
                           function(t,b) paste0(t,".",b,".af"))),
-          "core.sig","aggregate.sig","block.specific","grouped_total.sig",
+          "core.sig","convergent.sig","private.sig","grouped_total.sig",
           "B10.pv","B11.pv","B12.pv")
 miss <- need[!vapply(need, exists, logical(1))]
 if (length(miss)) stop("Knit the pipeline first (same session). Missing: ",
@@ -2103,8 +2103,8 @@ true_outliers <- function(trt) {
   sigcol <- paste0("Sig.", trt)
   unique(rbindlist(list(
     data.table(SNP = core.sig$SNP,       s = asL(core.sig[[sigcol]])),
-    data.table(SNP = aggregate.sig$SNP,  s = asL(aggregate.sig[[sigcol]])),
-    data.table(SNP = block.specific$SNP, s = asL(block.specific[[sigcol]]))
+    data.table(SNP = convergent.sig$SNP,  s = asL(convergent.sig[[sigcol]])),
+    data.table(SNP = private.sig$SNP, s = asL(private.sig[[sigcol]]))
   ))[s == TRUE, SNP])
 }
 # bed-based CON-confound exclusion (same sets used for the "CON Filtered" tier
@@ -2254,8 +2254,8 @@ if (!is.null(gene_of)) {
   # raw per-block FDR set, so the dots no longer pile up.
   true_case <- unique(rbindlist(list(
     data.table(SNP = core.sig$SNP,       s = asL(core.sig$Sig.CASE)),
-    data.table(SNP = aggregate.sig$SNP,  s = asL(aggregate.sig$Sig.CASE)),
-    data.table(SNP = block.specific$SNP, s = asL(block.specific$Sig.CASE))))[s == TRUE, .(SNP)])
+    data.table(SNP = convergent.sig$SNP,  s = asL(convergent.sig$Sig.CASE)),
+    data.table(SNP = private.sig$SNP, s = asL(private.sig$Sig.CASE))))[s == TRUE, .(SNP)])
   out_long <- rbindlist(lapply(blocks, function(b) {
     pv <- pv_list[[b]]
     s  <- pv[SNP %in% true_case$SNP & QCASE < alpha & QCON > alpha2, SNP]
@@ -2385,19 +2385,19 @@ mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Core.pca.filter CASE.All.Blocks.cov.
 mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Core.pca.filter CASE.All.Blocks.sync \
   | cut --complement -f60- > Core.outlier.pca.block.sync
 
-# --- Block-Specific loci ---
-mawk '!/CHR/' BS.Significant.Loci | cut -f2,3 | sort | uniq > BS.pca.filter
-mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' BS.pca.filter CASE.All.Blocks.cov.sync \
-  | cut --complement -f60- > BS.outlier.pca.sync
-mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' BS.pca.filter CASE.All.Blocks.sync \
-  | cut --complement -f60- > BS.outlier.pca.block.sync
+# --- Private loci ---
+mawk '!/CHR/' Priv.Significant.Loci | cut -f2,3 | sort | uniq > Priv.pca.filter
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Priv.pca.filter CASE.All.Blocks.cov.sync \
+  | cut --complement -f60- > Priv.outlier.pca.sync
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Priv.pca.filter CASE.All.Blocks.sync \
+  | cut --complement -f60- > Priv.outlier.pca.block.sync
 
-# --- Aggregate loci ---
-mawk '!/CHR/' Agg.Significant.Loci | cut -f2,3 | sort | uniq > Agg.pca.filter
-mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Agg.pca.filter CASE.All.Blocks.cov.sync \
-  | cut --complement -f60- > Agg.outlier.pca.sync
-mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Agg.pca.filter CASE.All.Blocks.sync \
-  | cut --complement -f60- > Agg.outlier.pca.block.sync
+# --- Convergent loci ---
+mawk '!/CHR/' Conv.Significant.Loci | cut -f2,3 | sort | uniq > Conv.pca.filter
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Conv.pca.filter CASE.All.Blocks.cov.sync \
+  | cut --complement -f60- > Conv.outlier.pca.sync
+mawk 'NR==FNR{a[$1,$2]; next} ($1,$2) in a' Conv.pca.filter CASE.All.Blocks.sync \
+  | cut --complement -f60- > Conv.outlier.pca.block.sync
 ```
 
 ### All-samples PCA helper function
@@ -2489,17 +2489,17 @@ run_tier_pca <- function(sync_file, tier_label, out_prefix) {
 # All three tiers run across all 56 samples; block-restrict Agg/BS later
 # if the all-block PCA is uninformative.
 pca.core <- run_tier_pca("Core.outlier.pca.sync",  "Core Loci",           "PC_Core")
-pca.agg  <- run_tier_pca("Agg.outlier.pca.sync",   "Convergent Loci",     "PC_Agg")
-pca.bs   <- run_tier_pca("BS.outlier.pca.sync",    "Private Loci",        "PC_BS")
+pca.conv  <- run_tier_pca("Conv.outlier.pca.sync",   "Convergent Loci",     "PC_Conv")
+pca.priv   <- run_tier_pca("Priv.outlier.pca.sync",    "Private Loci",        "PC_Priv")
 
 # Print in-line
 print(pca.core$p_treat)
-print(pca.agg$p_treat)
-print(pca.bs$p_treat)
+print(pca.conv$p_treat)
+print(pca.priv$p_treat)
 ```
 
 ```{r figS3-tier-pca, fig.width=16, fig.height=5.5}
-figS3 <- (pca.core$p_treat + pca.agg$p_treat + pca.bs$p_treat) +
+figS3 <- (pca.core$p_treat + pca.conv$p_treat + pca.priv$p_treat) +
   plot_layout(guides = "collect") +
   plot_annotation(tag_levels = "A",
                   title = "Fig S3 — Tier-specific PCA (treatment-coloured): Core | Convergent | Private")
@@ -2521,12 +2521,12 @@ make_tier_palette <- function(base_color)
     "Private" = lighten_color(base_color, 0.72))
 build_tier_highlights <- function(dfm, block_num, treatment_col) {
   h.core <- core.sig       %>% dplyr::filter(BLOCK == block_num, asL(.data[[treatment_col]]))
-  h.agg  <- aggregate.sig  %>% dplyr::filter(BLOCK == block_num, asL(.data[[treatment_col]]))
-  h.bs   <- block.specific %>% dplyr::filter(asL(.data[[treatment_col]]))
+  h.conv  <- convergent.sig  %>% dplyr::filter(BLOCK == block_num, asL(.data[[treatment_col]]))
+  h.priv   <- private.sig %>% dplyr::filter(asL(.data[[treatment_col]]))
   dplyr::bind_rows(
     dplyr::semi_join(dfm, h.core, by = "SNP") %>% dplyr::mutate(Tier = "Core"),
-    dplyr::semi_join(dfm, h.agg,  by = "SNP") %>% dplyr::mutate(Tier = "Convergent"),
-    dplyr::semi_join(dfm, h.bs,   by = "SNP") %>% dplyr::mutate(Tier = "Private")
+    dplyr::semi_join(dfm, h.conv,  by = "SNP") %>% dplyr::mutate(Tier = "Convergent"),
+    dplyr::semi_join(dfm, h.priv,   by = "SNP") %>% dplyr::mutate(Tier = "Private")
   ) %>% dplyr::mutate(Tier = factor(Tier, levels = c("Core","Convergent","Private")))
 }
 manhattan_block <- function(pv_df, block_num, treatment_col, qcolumn, base_color,
@@ -2978,8 +2978,8 @@ ggsave("./GO/GO_theme_heatmap_treatment.png", p_theme_treat,
        width = 11, height = 6.5, dpi = 300, bg = "transparent")
 
 # ---- 3b: theme x tier, for the CASE treatment ----
-mat_tier <- sapply(list(Core = GO_Core_CASE, Convergent = GO_Agg_CASE,
-                        "Private" = GO_BS_CASE), theme_counts)
+mat_tier <- sapply(list(Core = GO_Core_CASE, Convergent = GO_Conv_CASE,
+                        "Private" = GO_Priv_CASE), theme_counts)
 df_tier <- as.data.frame(mat_tier, check.names = FALSE) %>%
   mutate(theme = theme_levels) %>%
   pivot_longer(-theme, names_to = "tier", values_to = "n")
@@ -3039,8 +3039,8 @@ master <- rbindlist(lapply(seq_len(nrow(grid_tb)), function(i) {
 master[, `:=`(MAF0 = pmin(T0, 1 - T0), abs_dAF = abs(dAF),
               treatment = factor(treatment, levels = c("CA","SE","CASE")))]
 tier_of <- rbindlist(list(data.table(SNP = core.sig$SNP, tier = "Core"),
-                          data.table(SNP = aggregate.sig$SNP, tier = "Convergent"),
-                          data.table(SNP = block.specific$SNP, tier = "Private")))[!duplicated(SNP)]
+                          data.table(SNP = convergent.sig$SNP, tier = "Convergent"),
+                          data.table(SNP = private.sig$SNP, tier = "Private")))[!duplicated(SNP)]
 master <- merge(master, tier_of, by = "SNP", all.x = TRUE)
 master[is.na(tier), tier := "Background"][, tier := factor(tier, levels = tier_levels)]
 ```
@@ -3113,8 +3113,8 @@ fig4
 # Reuses go_dir2 / go_cat_cols from Fig S5. Point size = proportion of significant genes
 # annotated to that term; colour = GO category (BP/CC/MF). Not split by stressor.
 go_tier_files <- c(Core = "Core_ALL_GO_en_sig_gene.csv",
-                   Aggregate = "Agg_ALL_GO_en_sig_gene.csv",
-                   `Block-Specific` = "BS_ALL_GO_en_sig_gene.csv")
+                   Convergent = "Conv_ALL_GO_en_sig_gene.csv",
+                   `Private` = "Priv_ALL_GO_en_sig_gene.csv")
 plot_go_lollipop <- function(file, label, top_n = 10, leg = FALSE) {
   d <- as.data.table(fread(file.path(go_dir2, file)))
   d <- d[, .(GO = GeneOntologyIDs, Term, Fisher, ontology, prop.sig.genes)]
@@ -3143,8 +3143,8 @@ plot_go_lollipop <- function(file, label, top_n = 10, leg = FALSE) {
 
 
 fig5 <- (free(plot_go_lollipop(go_tier_files[["Core"]], "Core"), type= "label") /
-  free(plot_go_lollipop(go_tier_files[["Aggregate"]], "Convergent") , type = "label")/
-  free(plot_go_lollipop(go_tier_files[["Block-Specific"]], "Private", leg = TRUE), type="label")) / guide_area() + plot_layout(guides = "collect", heights = c(3,3,3,1))
+  free(plot_go_lollipop(go_tier_files[["Convergent"]], "Convergent") , type = "label")/
+  free(plot_go_lollipop(go_tier_files[["Private"]], "Private", leg = TRUE), type="label")) / guide_area() + plot_layout(guides = "collect", heights = c(3,3,3,1))
 fig5 <- fig5 + plot_annotation(title = "Fig 5 — top enriched GO terms by tier (all stressors pooled)") & theme(legend.box = "horizontal", legend.box.margin = margin(0, 0, -20, -100), legend.key.spacing.x = unit(3.0, "cm"))
 save_case(fig5, "Fig5_GO_by_tier.png", width = 7, height = 11)
 fig5
@@ -3209,8 +3209,8 @@ tier_count <- function(df, tier) data.frame(Tier = tier,
   CASE = sum(asL(df$Sig.CASE), na.rm = TRUE),
   Total = nrow(df))
 tabS1 <- rbind(tier_count(core.sig, "Core"),
-               tier_count(aggregate.sig, "Convergent"),
-               tier_count(block.specific, "Private"))
+               tier_count(convergent.sig, "Convergent"),
+               tier_count(private.sig, "Private"))
 write.csv(tabS1, file.path(tab_dir, "TableS1_tier_locus_counts.csv"), row.names = FALSE)
 print(tabS1)
 
