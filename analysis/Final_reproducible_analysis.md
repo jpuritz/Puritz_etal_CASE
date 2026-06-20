@@ -1,7 +1,7 @@
 CASE — Reproducible Analysis (Coastal Acidification & Sewage Effluent)
 ================
 Jonathan Puritz
-2026-06-15
+2026-06-19
 
 - [Setup](#setup)
   - [Software environment](#software-environment)
@@ -6935,6 +6935,76 @@ master[is.na(tier), tier := "Background"][, tier := factor(tier, levels = tier_l
 ```
 
 ``` r
+# Diversity at selected loci, by tier (CON-anchored). For each treatment's outlier loci in a tier,
+# the excess change in expected heterozygosity = (treatment post-initial He) - (CON post-initial
+# He) at the SAME loci. He_site = (c/(c-1)) * 2pq (read-count corrected). CON-anchoring removes the
+# initial-vs-post offset and the ascertainment shared with CON, so a positive excess means the
+# treatment raised diversity at its targets (rare variants rising toward intermediate frequency).
+# Built from the raw per-treatment af/cov objects (master drops CON, so it cannot be used here).
+he_min_cov <- 2; he_n0 <- 40000; he_n1 <- 10000
+he_site_corr <- function(p, c, n) (c / (c - 1)) * 2 * p * (1 - p)
+he_to_us <- function(x) sub("\\.(?=[^.]+$)", "_", x, perl = TRUE)   # CHROM.POS -> CHROM_POS
+he_asL   <- function(x) as.logical(x)
+he_tier_objs <- list(Core = core.sig, Convergent = convergent.sig, Private = private.sig)
+he_tier_snps <- function(tier, trt) {
+  d <- he_tier_objs[[tier]]; unique(d$SNP[he_asL(d[[paste0("Sig.", trt)]])])
+}
+he_pair <- function(af, cov, i0, i1, idx) {
+  p0 <- af[idx, i0]; c0 <- cov[idx, i0]; p1 <- af[idx, i1]; c1 <- cov[idx, i1]
+  ok <- is.finite(p0) & is.finite(p1) & is.finite(c0) & is.finite(c1) &
+        c0 >= he_min_cov & c1 >= he_min_cov
+  if (!any(ok)) return(c(NA_real_, NA_real_))
+  c(mean(he_site_corr(p0[ok], c0[ok], he_n0)), mean(he_site_corr(p1[ok], c1[ok], he_n1)))
+}
+he_rows <- list()
+for (blk in c("b10", "b11", "b12")) {
+  des <- block_design[[blk]]; gen <- des$gen; repl <- des$repl
+  afC <- as.matrix(get(paste0("con.", blk, ".af")));  covC <- as.matrix(get(paste0("con.", blk, ".cov")))
+  rnC <- he_to_us(rownames(afC))
+  for (tr in c("CA", "SE", "CASE")) {
+    afT  <- as.matrix(get(paste0(tolower(tr), ".", blk, ".af")))
+    covT <- as.matrix(get(paste0(tolower(tr), ".", blk, ".cov")))
+    rnT  <- he_to_us(rownames(afT))
+    for (tier in names(he_tier_objs)) {
+      common <- intersect(intersect(rnT, rnC), he_tier_snps(tier, tr))
+      if (!length(common)) next
+      idxT <- match(common, rnT); idxC <- match(common, rnC)
+      dT <- dC <- numeric(0)
+      for (r in unique(repl)) {
+        i0 <- which(repl == r & gen == 0); i1 <- which(repl == r & gen == 1)
+        if (length(i0) != 1 || length(i1) != 1) next
+        mT <- he_pair(afT, covT, i0, i1, idxT); dT <- c(dT, mT[2] - mT[1])
+        mC <- he_pair(afC, covC, i0, i1, idxC); dC <- c(dC, mC[2] - mC[1])
+      }
+      he_rows[[length(he_rows) + 1]] <- data.table(
+        block = toupper(blk), treatment = tr, tier = tier,
+        n_out = length(common), excess = mean(dT, na.rm = TRUE) - mean(dC, na.rm = TRUE))
+    }
+  }
+}
+he_tier_dt <- rbindlist(he_rows)
+he_tier_dt[, treatment := factor(treatment, levels = c("CA", "SE", "CASE"))]
+he_tier_dt[, tier := factor(tier, levels = c("Core", "Convergent", "Private"))]
+fwrite(he_tier_dt, file.path(out_dir, "Fig4_He_by_tier.csv"))
+
+y.expression <- expression(H[E])
+
+fig4_he_panel <- ggplot(he_tier_dt, aes(treatment, excess, fill = treatment)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_boxplot(alpha = 0.55, outlier.shape = NA, colour = "black", width = 0.6) +
+  geom_jitter(aes(shape = block), width = 0.12, height = 0, size = 2.2, alpha = 0.85) +
+  facet_wrap(~ tier, axes = "all") +
+  scale_fill_manual(values = unlist(treat_cols[c("CA","SE","CASE")]), name = "Treatment") +
+  scale_shape_manual(values = spawn_shapes, name = "Block") +
+  labs(x = NULL, y = expression("Excess" ~ italic(H[E]) ~ "compared to CON")) +
+  theme_case(12) +
+  theme(strip.background = element_blank(), strip.text = element_text(face = "bold"), legend.direction = "horizontal", legend.position = "bottom",panel.spacing = unit(1, "lines"), axis.title.y = element_text(size=10, margin = margin(t = 0, r = 0, b = 0, l = 0)), plot.margin = margin(t = -0, r = 0, b = 0, l = -0, unit = "pt"))
+fig4_he_panel
+```
+
+![](Final_reproducible_analysis_files/figure-gfm/fig4-he-tier-1.png)<!-- -->
+
+``` r
 # Per-tier composite: 2D KDE (points coloured by stressor) with MAF0 (top) and |dAF|
 # (right) marginal densities. CON dropped. Faceted by Tier (Core/Convergent/Private)
 # instead of by stressor; points are coloured by stressor (CA/SE/CASE).
@@ -6986,13 +7056,32 @@ arch_panel_tier <- function(tr, leg = FALSE) {
   patch <- top + plot_spacer() + center + right +
     plot_layout(ncol = 2, widths = c(4, 1), heights = c(1, 4)) 
   patch[[3]] <- patch[[3]] + plot_annotation(tag_levels = 'A')
+  patch
 }
-fig4 <- (arch_panel_tier("Core") | arch_panel_tier("Convergent", leg = TRUE) | arch_panel_tier("Private"))
-fig4[[1]] <- fig4[[1]] + plot_annotation(tag_levels = 'A')
-fig4 <- fig4 + plot_annotation(tag_levels = 'A')
-save_case(fig4, "Fig4_architecture_density2d.png", width = 14, height = 5.5)
+fig4_arch <- (arch_panel_tier("Core") | arch_panel_tier("Convergent", leg = TRUE) | arch_panel_tier("Private"))
+# Stack the tier-architecture row (top) over the diversity-at-selected-loci panel (bottom).
+# wrap_elements keeps the nested architecture row as one element so the bottom panel does not get
+# pulled into its 2x2 layout. Heights/tags may want a visual tweak after knitting.
+fig4 <- patchwork::wrap_elements(plot = fig4_arch) / (fig4_he_panel)+
+  plot_layout(heights = c(2, 1.5)) + plot_annotation(tag_levels = 'A')
+save_case(fig4, "Fig4_architecture_density2d.png", width = 14, height = 9)
+```
+
+    ## Picking joint bandwidth of 0.00804
+
+    ## Picking joint bandwidth of 0.0107
+
+    ## Picking joint bandwidth of 0.0116
+
+``` r
 fig4
 ```
+
+    ## Picking joint bandwidth of 0.00804
+
+    ## Picking joint bandwidth of 0.0107
+
+    ## Picking joint bandwidth of 0.0116
 
 ![](Final_reproducible_analysis_files/figure-gfm/fig4-density2d-1.png)<!-- -->
 
