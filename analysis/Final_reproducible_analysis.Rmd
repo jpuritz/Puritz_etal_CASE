@@ -3174,16 +3174,18 @@ he_tier_dt[, treatment := factor(treatment, levels = c("CA", "SE", "CASE"))]
 he_tier_dt[, tier := factor(tier, levels = c("Core", "Convergent", "Private"))]
 fwrite(he_tier_dt, file.path(out_dir, "Fig4_He_by_tier.csv"))
 
+y.expression <- expression(H[E])
+
 fig4_he_panel <- ggplot(he_tier_dt, aes(treatment, excess, fill = treatment)) +
   geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
   geom_boxplot(alpha = 0.55, outlier.shape = NA, colour = "black", width = 0.6) +
   geom_jitter(aes(shape = block), width = 0.12, height = 0, size = 2.2, alpha = 0.85) +
-  facet_wrap(~ tier) +
-  scale_fill_manual(values = unlist(treat_cols[c("CA","SE","CASE")]), guide = "none") +
-  scale_shape_manual(values = spawn_shapes, name = "Spawn") +
-  labs(x = NULL, y = "Excess He at selected loci\n(treatment − CON, post − initial)") +
+  facet_wrap(~ tier, axes = "all") +
+  scale_fill_manual(values = unlist(treat_cols[c("CA","SE","CASE")]), name = "Treatment") +
+  scale_shape_manual(values = spawn_shapes, name = "Block") +
+  labs(x = NULL, y = expression("Excess" ~ italic(H[E]) ~ "compared to CON")) +
   theme_case(12) +
-  theme(strip.background = element_blank(), strip.text = element_text(face = "bold"))
+  theme(strip.background = element_blank(), strip.text = element_text(face = "bold"), legend.direction = "horizontal", legend.position = "bottom",panel.spacing = unit(1, "lines"), axis.title.y = element_text(size=10, margin = margin(t = 0, r = 0, b = 0, l = 0)), plot.margin = margin(t = -0, r = 0, b = 0, l = -0, unit = "pt"))
 fig4_he_panel
 ```
 
@@ -3239,13 +3241,14 @@ arch_panel_tier <- function(tr, leg = FALSE) {
   patch <- top + plot_spacer() + center + right +
     plot_layout(ncol = 2, widths = c(4, 1), heights = c(1, 4)) 
   patch[[3]] <- patch[[3]] + plot_annotation(tag_levels = 'A')
+  patch
 }
 fig4_arch <- (arch_panel_tier("Core") | arch_panel_tier("Convergent", leg = TRUE) | arch_panel_tier("Private"))
 # Stack the tier-architecture row (top) over the diversity-at-selected-loci panel (bottom).
 # wrap_elements keeps the nested architecture row as one element so the bottom panel does not get
 # pulled into its 2x2 layout. Heights/tags may want a visual tweak after knitting.
-fig4 <- patchwork::wrap_elements(fig4_arch) / fig4_he_panel +
-  plot_layout(heights = c(2, 1.05))
+fig4 <- patchwork::wrap_elements(plot = fig4_arch) / (fig4_he_panel)+
+  plot_layout(heights = c(2, 1.5)) + plot_annotation(tag_levels = 'A')
 save_case(fig4, "Fig4_architecture_density2d.png", width = 14, height = 9)
 fig4
 ```
