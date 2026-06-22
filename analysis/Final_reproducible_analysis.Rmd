@@ -2427,10 +2427,14 @@ p_s2_spawn <- ggplot(dr, aes(PC1, PC2, fill = Spawn)) +
   geom_point(size = 4, shape = 21, colour = "black", alpha = 0.8) +
   scale_fill_manual(values = spawn_cols) +
   s2_lab + labs(title = "By spawn") + theme_case(13)
-figS2 <- p_s2_treat + p_s2_spawn +
+# Venn of SNPs called per spawn (built above into VenSNPs.png); embed as a raster panel so the
+# VennDiagram grob drops cleanly into the patchwork, the same approach used for the Fig 1 schematic.
+venn_panel <- patchwork::wrap_elements(full = grid::rasterGrob(png::readPNG("VenSNPs.png"),
+                                                               interpolate = TRUE))
+figS2 <- venn_panel + p_s2_treat + p_s2_spawn +
   plot_annotation(tag_levels = "A",
-                  title = "Fig S2 — Genome-wide PCA of allele frequencies (10,000 random loci)")
-save_supp(figS2, "FigS2_genomewide_PCA.png", width = 13, height = 5)
+                  title = "Fig S2 — Called-SNP overlap and genome-wide PCA (10,000 random loci)")
+save_supp(figS2, "FigS2_genomewide_PCA.png", width = 18, height = 5.5)
 figS2
 ```
 
