@@ -1,7 +1,7 @@
 CASE — Reproducible Analysis (Coastal Acidification & Sewage Effluent)
 ================
 Jonathan Puritz
-2026-06-19
+2026-06-23
 
 - [Setup](#setup)
   - [Software environment](#software-environment)
@@ -6145,10 +6145,14 @@ p_s2_spawn <- ggplot(dr, aes(PC1, PC2, fill = Spawn)) +
   geom_point(size = 4, shape = 21, colour = "black", alpha = 0.8) +
   scale_fill_manual(values = spawn_cols) +
   s2_lab + labs(title = "By spawn") + theme_case(13)
-figS2 <- p_s2_treat + p_s2_spawn +
+# Venn of SNPs called per spawn (built above into VenSNPs.png); embed as a raster panel so the
+# VennDiagram grob drops cleanly into the patchwork, the same approach used for the Fig 1 schematic.
+venn_panel <- patchwork::wrap_elements(full = grid::rasterGrob(png::readPNG("VenSNPs.png"),
+                                                               interpolate = TRUE))
+figS2 <- venn_panel + p_s2_treat + p_s2_spawn +
   plot_annotation(tag_levels = "A",
-                  title = "Fig S2 — Genome-wide PCA of allele frequencies (10,000 random loci)")
-save_supp(figS2, "FigS2_genomewide_PCA.png", width = 13, height = 5)
+                  title = "Fig S2 — Called-SNP overlap and genome-wide PCA (10,000 random loci)")
+save_supp(figS2, "FigS2_genomewide_PCA.png", width = 18, height = 5.5)
 figS2
 ```
 
@@ -6427,13 +6431,13 @@ Same stacked layout as Fig 3A (B12), for the other two sequenced spawns.
 y capped at 20 for cross-spawn comparability with the main figure.
 
 ``` r
-mk_manhattan_stack <- function(block_pv, bn) {
-  ca   <- manhattan_block(block_pv, bn, "Sig.CA",   "QCA",   "#E69F00", title = paste0("B", bn, " — CA"),   ylim = c(0, 20))
-  se   <- manhattan_block(block_pv, bn, "Sig.SE",   "QSE",   "#0072B2", title = paste0("B", bn, " — SE"),   ylim = c(0, 20))
-  case <- manhattan_block(block_pv, bn, "Sig.CASE", "QCASE", "#009E73", title = paste0("B", bn, " — CASE"), ylim = c(0, 20))
-  (ca / se / case) & theme(plot.margin = margin(0, 0, 0, 0))
+mk_manhattan_stack <- function(block_pv, bn, ymax) {
+  ca   <- manhattan_block(block_pv, bn, "Sig.CA",   "QCA",   "#E69F00", title = paste0("B", bn, " — CA"),   ylim = c(0, ymax))
+  se   <- manhattan_block(block_pv, bn, "Sig.SE",   "QSE",   "#0072B2", title = paste0("B", bn, " — SE"),   ylim = c(0, ymax))
+  case <- manhattan_block(block_pv, bn, "Sig.CASE", "QCASE", "#009E73", title = paste0("B", bn, " — CASE"), ylim = c(0, ymax))
+  (ca / se / case) & theme(plot.margin = margin(10, 0, 0, 0))
 }
-figS5 <- mk_manhattan_stack(pv_list$B10, 10)
+figS5 <- mk_manhattan_stack(pv_list$B10, 10,40)
 save_supp(figS5, "FigS5_B10_manhattan_3stressor.png", width = 11, height = 10)
 figS5
 ```
@@ -6441,7 +6445,7 @@ figS5
 ![](Final_reproducible_analysis_files/figure-gfm/figS5-S6-manhattan-1.png)<!-- -->
 
 ``` r
-figS6 <- mk_manhattan_stack(pv_list$B11, 11)
+figS6 <- mk_manhattan_stack(pv_list$B11, 11,12)
 save_supp(figS6, "FigS6_B11_manhattan_3stressor.png", width = 11, height = 10)
 figS6
 ```
