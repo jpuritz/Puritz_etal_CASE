@@ -2666,17 +2666,17 @@ Same stacked layout as Fig 3A (B12), for the other two sequenced spawns. y cappe
 at 20 for cross-spawn comparability with the main figure.
 
 ```{r figS5-S6-manhattan, fig.width=11, fig.height=10}
-mk_manhattan_stack <- function(block_pv, bn) {
-  ca   <- manhattan_block(block_pv, bn, "Sig.CA",   "QCA",   "#E69F00", title = paste0("B", bn, " — CA"),   ylim = c(0, 20))
-  se   <- manhattan_block(block_pv, bn, "Sig.SE",   "QSE",   "#0072B2", title = paste0("B", bn, " — SE"),   ylim = c(0, 20))
-  case <- manhattan_block(block_pv, bn, "Sig.CASE", "QCASE", "#009E73", title = paste0("B", bn, " — CASE"), ylim = c(0, 20))
-  (ca / se / case) & theme(plot.margin = margin(0, 0, 0, 0))
+mk_manhattan_stack <- function(block_pv, bn, ymax) {
+  ca   <- manhattan_block(block_pv, bn, "Sig.CA",   "QCA",   "#E69F00", title = paste0("B", bn, " — CA"),   ylim = c(0, ymax))
+  se   <- manhattan_block(block_pv, bn, "Sig.SE",   "QSE",   "#0072B2", title = paste0("B", bn, " — SE"),   ylim = c(0, ymax))
+  case <- manhattan_block(block_pv, bn, "Sig.CASE", "QCASE", "#009E73", title = paste0("B", bn, " — CASE"), ylim = c(0, ymax))
+  (ca / se / case) & theme(plot.margin = margin(10, 0, 0, 0))
 }
-figS5 <- mk_manhattan_stack(pv_list$B10, 10)
+figS5 <- mk_manhattan_stack(pv_list$B10, 10,40)
 save_supp(figS5, "FigS5_B10_manhattan_3stressor.png", width = 11, height = 10)
 figS5
 
-figS6 <- mk_manhattan_stack(pv_list$B11, 11)
+figS6 <- mk_manhattan_stack(pv_list$B11, 11,12)
 save_supp(figS6, "FigS6_B11_manhattan_3stressor.png", width = 11, height = 10)
 figS6
 ```
