@@ -1,7 +1,7 @@
 CASE — Reproducible Analysis (Coastal Acidification & Sewage Effluent)
 ================
 Jonathan Puritz
-2026-06-23
+2026-07-01
 
 - [Setup](#setup)
   - [Software environment](#software-environment)
@@ -276,19 +276,19 @@ final_data_end %>%
     ## # A tibble: 4 × 2
     ##   Treatment Survival_centered
     ##   <fct>                 <dbl>
-    ## 1 CON                    8.55
-    ## 2 CA                     5.82
-    ## 3 SE                    -5.82
-    ## 4 CASE                  -8.55
+    ## 1 CON                    6.86
+    ## 2 CA                     5.87
+    ## 3 SE                    -6.22
+    ## 4 CASE                  -6.51
 
 ``` r
 fit <- aov(Survival_centered ~ Treatment, data = final_data_end)
 summary(fit)
 ```
 
-    ##             Df Sum Sq Mean Sq F value   Pr(>F)    
-    ## Treatment    3   2567   855.6    7.35 0.000426 ***
-    ## Residuals   44   5122   116.4                     
+    ##             Df Sum Sq Mean Sq F value  Pr(>F)   
+    ## Treatment    3   1950   650.2   6.227 0.00128 **
+    ## Residuals   44   4594   104.4                   
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
@@ -302,13 +302,13 @@ TukeyHSD(fit, "Treatment")
     ## Fit: aov(formula = Survival_centered ~ Treatment, data = final_data_end)
     ## 
     ## $Treatment
-    ##                diff       lwr        upr     p adj
-    ## CA-CON    -2.729683 -14.48989  9.0305202 0.9252235
-    ## SE-CON   -14.371788 -26.13199 -2.6115851 0.0110718
-    ## CASE-CON -17.095488 -28.85569 -5.3352847 0.0018894
-    ## SE-CA    -11.642105 -23.40231  0.1180982 0.0532436
-    ## CASE-CA  -14.365805 -26.12601 -2.6056015 0.0111127
-    ## CASE-SE   -2.723700 -14.48390  9.0365038 0.9256661
+    ##                 diff       lwr        upr     p adj
+    ## CA-CON    -0.9929114 -12.13049 10.1446684 0.9951842
+    ## SE-CON   -13.0825335 -24.22011 -1.9449536 0.0155479
+    ## CASE-CON -13.3666580 -24.50424 -2.2290782 0.0129672
+    ## SE-CA    -12.0896220 -23.22720 -0.9520422 0.0287110
+    ## CASE-CA  -12.3737466 -23.51133 -1.2361667 0.0241727
+    ## CASE-SE   -0.2841245 -11.42170 10.8534553 0.9998848
 
 ## Fig 1 — four-spawn survival strip
 
